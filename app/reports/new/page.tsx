@@ -2,19 +2,19 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
-// 保存用の型定義
 type SavedItem = string;
 
 export default function SnapReportPage() {
   // 入力ステート
   const [camera, setCamera] = useState('');
   const [lens, setLens] = useState('');
+  const [genre, setGenre] = useState('スナップ');
   const [tone, setTone] = useState('フランク・気さく');
   const [photoName, setPhotoName] = useState('オーレリアン二郎');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  // ウォーターマーク（画像文字入れ）設定
+  // ウォーターマーク設定
   const [showCameraOnImage, setShowCameraOnImage] = useState(true);
   const [showLensOnImage, setShowLensOnImage] = useState(true);
   const [showPhotoByOnImage, setShowPhotoByOnImage] = useState(true);
@@ -32,6 +32,9 @@ export default function SnapReportPage() {
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  // 写真ジャンルの選択肢
+  const genreOptions = ['スナップ', 'ポートレート', '風景', '都市・建築', '夜景', 'テーブルフォト・カフェ', 'フィルム・オールドレンズ', 'その他'];
+
   // トーンの選択肢
   const toneOptions = [
     { label: '🤩 テンション高め・ポップ', value: 'テンション高め・ポップ' },
@@ -45,11 +48,19 @@ export default function SnapReportPage() {
   useEffect(() => {
     const cameras = JSON.parse(localStorage.getItem('snap_cameras') || '[]');
     const lenses = JSON.parse(localStorage.getItem('snap_lenses') || '[]');
-    setSavedCameras(cameras);
-    setSavedLenses(lenses);
+    
+    // 初期値が空の場合のデフォルトサンプル
+    const defaultCameras = cameras.length ? cameras : ['Canon EOS RP', 'Yashica Electro 35', 'Konica C35 EF', 'Minolta α-303si'];
+    const defaultLenses = lenses.length ? lenses : ['Super-Takumar 50mm F1.4', 'RF24-105mm F4 L IS USM', 'Pancolar 50mm F1.8'];
+
+    setSavedCameras(defaultCameras);
+    setSavedLenses(defaultLenses);
+    
+    if (defaultCameras.length > 0) setCamera(defaultCameras[0]);
+    if (defaultLenses.length > 0) setLens(defaultLenses[0]);
   }, []);
 
-  // 画像が選択されたとき
+  // 画像選択処理
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -64,13 +75,13 @@ export default function SnapReportPage() {
     if (!value.trim()) return;
     if (type === 'camera') {
       if (!savedCameras.includes(value)) {
-        const updated = [...savedCameras, value];
+        const updated = [value, ...savedCameras];
         setSavedCameras(updated);
         localStorage.setItem('snap_cameras', JSON.stringify(updated));
       }
     } else {
       if (!savedLenses.includes(value)) {
-        const updated = [...savedLenses, value];
+        const updated = [value, ...savedLenses];
         setSavedLenses(updated);
         localStorage.setItem('snap_lenses', JSON.stringify(updated));
       }
@@ -93,24 +104,21 @@ export default function SnapReportPage() {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // 画像を描画
       ctx.drawImage(img, 0, 0);
 
-      // 表示するテキストの組み立て
+      // 表示するテキスト（ジャンルは含まない）
       const textLines: string[] = [];
       if (showPhotoByOnImage && photoName) textLines.push(`Photo ${photoName}`);
       if (showCameraOnImage && camera) textLines.push(`Cam: ${camera}`);
       if (showLensOnImage && lens) textLines.push(`Lens: ${lens}`);
 
       if (textLines.length > 0) {
-        // フォントサイズを画像解像度に合わせて自動調整
         const fontSize = Math.max(16, Math.floor(img.width * 0.025));
         const padding = fontSize * 0.8;
         const lineHeight = fontSize * 1.3;
 
         ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
 
-        // テキストブロックの幅と高さを計算
         let maxWidth = 0;
         textLines.forEach((line) => {
           const metrics = ctx.measureText(line);
@@ -120,7 +128,6 @@ export default function SnapReportPage() {
         const boxWidth = maxWidth + padding * 2;
         const boxHeight = textLines.length * lineHeight + padding * 1.2;
 
-        // 配置座標の計算
         let x = padding;
         let y = padding;
 
@@ -131,12 +138,15 @@ export default function SnapReportPage() {
           y = img.height - boxHeight - padding;
         }
 
-        // 半透明背景（読みやすさ向上）
         ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-        ctx.roundRect ? ctx.roundRect(x, y, boxWidth, boxHeight, 8) : ctx.fillRect(x, y, boxWidth, boxHeight);
-        ctx.fill();
+        if (ctx.roundRect) {
+          ctx.beginPath();
+          ctx.roundRect(x, y, boxWidth, boxHeight, 8);
+          ctx.fill();
+        } else {
+          ctx.fillRect(x, y, boxWidth, boxHeight);
+        }
 
-        // 文字の描画
         ctx.fillStyle = '#FFFFFF';
         ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
         ctx.shadowBlur = 4;
@@ -150,43 +160,22 @@ export default function SnapReportPage() {
     };
   }, [imagePreview, camera, lens, photoName, showCameraOnImage, showLensOnImage, showPhotoByOnImage, watermarkPosition]);
 
-  // AIキャプション生成処理
+  // AIキャプション生成
   const generateCaption = async () => {
     setLoading(true);
     saveCustomItem('camera', camera);
     saveCustomItem('lens', lens);
 
     try {
-      // 選択トーンに応じたプロンプト指示
-      const promptText = `
-あなたはSNS（InstagramやX）で目を引く写真投稿を作るプロのWebライターです。
-以下の写真情報をもとに、思わず「いいね」やコメントをしたくなるような印象的なキャプション（投稿本文）を作成してください。
-
-【撮影情報】
-・カメラ: ${camera || '未設定'}
-・レンズ: ${lens || '未設定'}
-・雰囲気/トーン: ${tone}
-・フォトグラファー: ${photoName ? `Photo ${photoName}` : '未設定'}
-
-【トーン＆書き方のルール】
-・指定されたトーン（${tone}）の雰囲気をしっかり出してください。
-・冒頭の1行目はタイムラインで目を引くインパク知のあるフック（強いフレーズ）にしてください。
-・ダラダラ書かず、テンポ良く読める改行や箇条書きを活用してください。
-・絵文字を適度に使って見栄え良くしてください。
-・末尾には写真・カメラ・雰囲気に合ったハッシュタグを6〜10個ほど付けてください。
-      `;
-
-      // API呼び出し (ダミーまたはGemini API連携)
-      // ここではプロンプト動作のイメージを出力します
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 1200));
 
       let mockOutput = '';
       if (tone === 'インパクト・キャッチー') {
-        mockOutput = `世界が息をのんだ瞬間、切り取ってみた。🔥\n\n一瞬の光と影のグラデーション。やっぱり ${camera || 'このカメラ'} と ${lens || 'このレンズ'} の組み合わせは反則級の描写力…！\n\nあなたはこの雰囲気、好きですか？ぜひコメントで教えてください👇\n\n------------------\nPhoto ${photoName}\nCam: ${camera}\nLens: ${lens}\n\n#写真好きな人と繋がりたい #ファインダー越しの私の世界 #カメラ男子 #カメラ女子 #写真部 #キリトリセカイ #${camera.replace(/\s+/g, '')}`;
+        mockOutput = `世界が息をのんだ瞬間の【${genre}】。🔥\n\n一瞬の光と影。やっぱり ${camera} と ${lens} の組み合わせは反則級の描写力…！\n\nこの雰囲気、どうですか？コメントで教えてください👇\n\n------------------\nPhoto ${photoName}\nCam: ${camera}\nLens: ${lens}\n\n#${genre} #${camera.replace(/\s+/g, '')} #ファインダー越しの私の世界 #キリトリセカイ`;
       } else if (tone === 'テンション高め・ポップ') {
-        mockOutput = `ちょっと待って、凄すぎる写真撮れちゃった！！📸✨\n\nシャッター切った瞬間「勝った」って叫びそうになった件（笑）\n${camera || 'お気に入りカメラ'} の色味が天才すぎてテンション爆上がりです最高🙌最高🙌\n\nみんなも今日一日お疲れ様でした〜！✨\n\n------------------\nPhoto ${photoName}\n#日常を彩る #カメラ散歩 #写真で伝えたい私の世界 #${camera.replace(/\s+/g, '')}`;
+        mockOutput = `ちょっと待って、凄すぎる【${genre}】写真撮れちゃった！！📸✨\n\nシャッター切った瞬間「勝った」って叫びそうになった件（笑）\n${camera} の色味が天才すぎてテンション爆上がりです最高🙌\n\n------------------\nPhoto ${photoName}\n#${genre} #カメラ散歩 #${camera.replace(/\s+/g, '')} #写真で伝えたい私の世界`;
       } else {
-        mockOutput = `日常の隙間に潜む、特別な光。✨\n\nふとした瞬間に惹かれてシャッターを切りました。${lens || 'このレンズ'} 独特のやわらかい空気感が心地いい。\n\n今日も良い一日になりますように。\n\n------------------\nPhoto ${photoName}\nCam: ${camera}\nLens: ${lens}\n\n#ファインダー越しの私の世界 #スナップ写真 #エモい写真 #東京カメラ部`;
+        mockOutput = `日常の隙間に潜む、特別な空気感。【${genre}】\n\nふとした瞬間に惹かれてシャッターを切りました。${lens} 独特のやわらかい光の捉え方が心地いい。\n\n------------------\nPhoto ${photoName}\nCam: ${camera}\nLens: ${lens}\n\n#${genre} #ファインダー越しの私の世界 #スナップ写真 #エモい写真`;
       }
 
       setGeneratedCaption(mockOutput);
@@ -205,50 +194,79 @@ export default function SnapReportPage() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-4 sm:p-8 font-sans max-w-3xl mx-auto">
+      {/* ヘッダー：SNAP REPORT AI の AI を削除 */}
       <header className="mb-8 text-center">
         <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
-          SnapReport AI
+          SnapReport
         </h1>
         <p className="text-sm text-slate-400 mt-2">SNS映えするキャプション＆ウォーターマーク画像生成</p>
       </header>
 
       <div className="space-y-6">
-        {/* 1. 機材・フォトグラファー設定 */}
+        {/* 1. 撮影情報 */}
         <section className="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-4">
           <h2 className="text-lg font-bold text-slate-200 border-b border-slate-700 pb-2">1. 撮影情報</h2>
-          
+
+          {/* カメラ選択（プルダウン ＋ 直接入力） */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1">カメラ</label>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">カメラ (選択または入力)</label>
+            <select
+              value={savedCameras.includes(camera) ? camera : 'custom'}
+              onChange={(e) => {
+                if (e.target.value !== 'custom') setCamera(e.target.value);
+              }}
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm mb-2 text-slate-200"
+            >
+              {savedCameras.map((item, i) => (
+                <option key={i} value={item}>{item}</option>
+              ))}
+              <option value="custom">＋ 直接入力する...</option>
+            </select>
             <input
               type="text"
               value={camera}
               onChange={(e) => setCamera(e.target.value)}
               placeholder="例: Canon EOS RP / Yashica Electro 35"
               className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500"
-              list="camera-history"
             />
-            <datalist id="camera-history">
-              {savedCameras.map((item, i) => (
-                <option key={i} value={item} />
-              ))}
-            </datalist>
           </div>
 
+          {/* レンズ選択（プルダウン ＋ 直接入力） */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1">レンズ</label>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">レンズ (選択または入力)</label>
+            <select
+              value={savedLenses.includes(lens) ? lens : 'custom'}
+              onChange={(e) => {
+                if (e.target.value !== 'custom') setLens(e.target.value);
+              }}
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm mb-2 text-slate-200"
+            >
+              {savedLenses.map((item, i) => (
+                <option key={i} value={item}>{item}</option>
+              ))}
+              <option value="custom">＋ 直接入力する...</option>
+            </select>
             <input
               type="text"
               value={lens}
               onChange={(e) => setLens(e.target.value)}
-              placeholder="例: Super-Takumar 50mm F1.4 / RF24-105mm"
+              placeholder="例: Super-Takumar 50mm F1.4"
               className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500"
-              list="lens-history"
             />
-            <datalist id="lens-history">
-              {savedLenses.map((item, i) => (
-                <option key={i} value={item} />
+          </div>
+
+          {/* 写真ジャンル（画像には入らずAI参考にのみ使用） */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">写真のジャンル (文章作成用)</label>
+            <select
+              value={genre}
+              onChange={(e) => setGenre(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+            >
+              {genreOptions.map((g) => (
+                <option key={g} value={g}>{g}</option>
               ))}
-            </datalist>
+            </select>
           </div>
 
           <div>
@@ -266,7 +284,7 @@ export default function SnapReportPage() {
           </div>
         </section>
 
-        {/* 2. 写真＆ウォーターマーク設定 */}
+        {/* 2. 写真＆文字入れ設定 */}
         <section className="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-4">
           <h2 className="text-lg font-bold text-slate-200 border-b border-slate-700 pb-2">2. 写真＆文字入れ（ウォーターマーク）</h2>
 
@@ -319,10 +337,9 @@ export default function SnapReportPage() {
                 </div>
               </div>
 
-              {/* プレビュー＆保存画像 */}
               {processedImageUrl && (
                 <div className="space-y-2">
-                  <p className="text-xs text-emerald-400 font-semibold">✨ 文字入れ済み画像（長押しで保存可能）:</p>
+                  <p className="text-xs text-emerald-400 font-semibold">✨ 文字入れ済み画像（長押し保存可能）:</p>
                   <img
                     src={processedImageUrl}
                     alt="Processed"
@@ -343,7 +360,7 @@ export default function SnapReportPage() {
 
         {/* 3. トーン＆AI生成 */}
         <section className="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-4">
-          <h2 className="text-lg font-bold text-slate-200 border-b border-slate-700 pb-2">3. AIキャプション設定</h2>
+          <h2 className="text-lg font-bold text-slate-200 border-b border-slate-700 pb-2">3. キャプション設定</h2>
 
           <div>
             <label className="block text-xs font-semibold text-slate-400 mb-2">キャプションの雰囲気（トーン）</label>
@@ -370,7 +387,7 @@ export default function SnapReportPage() {
             disabled={loading}
             className="w-full bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white font-bold py-3.5 rounded-xl shadow-lg transition disabled:opacity-50"
           >
-            {loading ? 'AIが生成中...' : '✨ 目を引くコメントを生成する'}
+            {loading ? '生成中...' : '✨ 目を引くコメントを生成する'}
           </button>
         </section>
 
