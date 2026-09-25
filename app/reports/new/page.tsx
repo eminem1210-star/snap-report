@@ -2,40 +2,34 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 
-type SavedItem = string;
-
 export default function SnapReportPage() {
-  // 入力ステート
   const [camera, setCamera] = useState('');
   const [lens, setLens] = useState('');
   const [genre, setGenre] = useState('スナップ');
   const [tone, setTone] = useState('フランク・気さく');
   const [photoName, setPhotoName] = useState('オーレリアン二郎');
+
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  // ウォーターマーク設定
   const [showCameraOnImage, setShowCameraOnImage] = useState(true);
   const [showLensOnImage, setShowLensOnImage] = useState(true);
   const [showPhotoByOnImage, setShowPhotoByOnImage] = useState(true);
   const [watermarkPosition, setWatermarkPosition] = useState<'bottom-left' | 'bottom-right' | 'top-left' | 'top-right'>('bottom-left');
+  
   const [processedImageUrl, setProcessedImageUrl] = useState<string | null>(null);
 
-  // 履歴保持 (LocalStorage)
-  const [savedCameras, setSavedCameras] = useState<SavedItem[]>([]);
-  const [savedLenses, setSavedLenses] = useState<SavedItem[]>([]);
+  const [savedCameras, setSavedCameras] = useState<string[]>([]);
+  const [savedLenses, setSavedLenses] = useState<string[]>([]);
 
-  // 生成結果
   const [generatedCaption, setGeneratedCaption] = useState('');
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  // 写真ジャンルの選択肢
   const genreOptions = ['スナップ', 'ポートレート', '風景', '都市・建築', '夜景', 'テーブルフォト・カフェ', 'フィルム・オールドレンズ', 'その他'];
 
-  // トーンの選択肢
   const toneOptions = [
     { label: '🤩 テンション高め・ポップ', value: 'テンション高め・ポップ' },
     { label: '☕️ フランク・気さく', value: 'フランク・気さく' },
@@ -44,23 +38,46 @@ export default function SnapReportPage() {
     { label: '📷 真面目・エモい・写真集風', value: '真面目・エモい' },
   ];
 
-  // 初回読み込み時にLocalStorageから履歴取得
+  // 設定＆履歴の復元
   useEffect(() => {
-    const cameras = JSON.parse(localStorage.getItem('snap_cameras') || '[]');
-    const lenses = JSON.parse(localStorage.getItem('snap_lenses') || '[]');
-    
-    // 初期値が空の場合のデフォルトサンプル
-    const defaultCameras = cameras.length ? cameras : ['Canon EOS RP', 'Yashica Electro 35', 'Konica C35 EF', 'Minolta α-303si'];
-    const defaultLenses = lenses.length ? lenses : ['Super-Takumar 50mm F1.4', 'RF24-105mm F4 L IS USM', 'Pancolar 50mm F1.8'];
+    const cameras = JSON.parse(localStorage.getItem('snap_cameras') || '["Canon EOS RP", "Yashica Electro 35"]');
+    const lenses = JSON.parse(localStorage.getItem('snap_lenses') || '["Super-Takumar 50mm F1.4", "RF24-105mm F4 L"]');
+    const lastPhotoName = localStorage.getItem('snap_photo_name') || 'オーレリアン二郎';
 
-    setSavedCameras(defaultCameras);
-    setSavedLenses(defaultLenses);
-    
-    if (defaultCameras.length > 0) setCamera(defaultCameras[0]);
-    if (defaultLenses.length > 0) setLens(defaultLenses[0]);
+    setSavedCameras(cameras);
+    setSavedLenses(lenses);
+    setPhotoName(lastPhotoName);
+    if (cameras.length > 0) setCamera(cameras[0]);
+    if (lenses.length > 0) setLens(lenses[0]);
   }, []);
 
-  // 画像選択処理
+  // 履歴保存
+  const saveHistory = (type: 'camera' | 'lens', val: string) => {
+    if (!val.trim()) return;
+    if (type === 'camera') {
+      const updated = Array.from(new Set([val, ...savedCameras]));
+      setSavedCameras(updated);
+      localStorage.setItem('snap_cameras', JSON.stringify(updated));
+    } else {
+      const updated = Array.from(new Set([val, ...savedLenses]));
+      setSavedLenses(updated);
+      localStorage.setItem('snap_lenses', JSON.stringify(updated));
+    }
+  };
+
+  // 履歴削除
+  const removeHistory = (type: 'camera' | 'lens', item: string) => {
+    if (type === 'camera') {
+      const updated = savedCameras.filter((c) => c !== item);
+      setSavedCameras(updated);
+      localStorage.setItem('snap_cameras', JSON.stringify(updated));
+    } else {
+      const updated = savedLenses.filter((l) => l !== item);
+      setSavedLenses(updated);
+      localStorage.setItem('snap_lenses', JSON.stringify(updated));
+    }
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -70,25 +87,7 @@ export default function SnapReportPage() {
     }
   };
 
-  // カメラ・レンズの保存処理
-  const saveCustomItem = (type: 'camera' | 'lens', value: string) => {
-    if (!value.trim()) return;
-    if (type === 'camera') {
-      if (!savedCameras.includes(value)) {
-        const updated = [value, ...savedCameras];
-        setSavedCameras(updated);
-        localStorage.setItem('snap_cameras', JSON.stringify(updated));
-      }
-    } else {
-      if (!savedLenses.includes(value)) {
-        const updated = [value, ...savedLenses];
-        setSavedLenses(updated);
-        localStorage.setItem('snap_lenses', JSON.stringify(updated));
-      }
-    }
-  };
-
-  // キャンバス描画（画像へ文字を合成）
+  // Canvas描画（高速レンダリング）
   useEffect(() => {
     if (!imagePreview) {
       setProcessedImageUrl(null);
@@ -106,18 +105,17 @@ export default function SnapReportPage() {
 
       ctx.drawImage(img, 0, 0);
 
-      // 表示するテキスト（ジャンルは含まない）
       const textLines: string[] = [];
       if (showPhotoByOnImage && photoName) textLines.push(`Photo ${photoName}`);
       if (showCameraOnImage && camera) textLines.push(`Cam: ${camera}`);
       if (showLensOnImage && lens) textLines.push(`Lens: ${lens}`);
 
       if (textLines.length > 0) {
-        const fontSize = Math.max(16, Math.floor(img.width * 0.025));
+        const fontSize = Math.max(18, Math.floor(img.width * 0.026));
         const padding = fontSize * 0.8;
         const lineHeight = fontSize * 1.3;
 
-        ctx.font = `500 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+        ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
 
         let maxWidth = 0;
         textLines.forEach((line) => {
@@ -131,25 +129,21 @@ export default function SnapReportPage() {
         let x = padding;
         let y = padding;
 
-        if (watermarkPosition.includes('right')) {
-          x = img.width - boxWidth - padding;
-        }
-        if (watermarkPosition.includes('bottom')) {
-          y = img.height - boxHeight - padding;
-        }
+        if (watermarkPosition.includes('right')) x = img.width - boxWidth - padding;
+        if (watermarkPosition.includes('bottom')) y = img.height - boxHeight - padding;
 
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         if (ctx.roundRect) {
           ctx.beginPath();
-          ctx.roundRect(x, y, boxWidth, boxHeight, 8);
+          ctx.roundRect(x, y, boxWidth, boxHeight, 10);
           ctx.fill();
         } else {
           ctx.fillRect(x, y, boxWidth, boxHeight);
         }
 
         ctx.fillStyle = '#FFFFFF';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-        ctx.shadowBlur = 4;
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+        ctx.shadowBlur = 6;
 
         textLines.forEach((line, index) => {
           ctx.fillText(line, x + padding, y + padding + fontSize * 0.9 + index * lineHeight);
@@ -160,29 +154,54 @@ export default function SnapReportPage() {
     };
   }, [imagePreview, camera, lens, photoName, showCameraOnImage, showLensOnImage, showPhotoByOnImage, watermarkPosition]);
 
-  // AIキャプション生成
+  // AIキャプション呼び出し
   const generateCaption = async () => {
     setLoading(true);
-    saveCustomItem('camera', camera);
-    saveCustomItem('lens', lens);
+    saveHistory('camera', camera);
+    saveHistory('lens', lens);
+    localStorage.setItem('snap_photo_name', photoName);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const res = await fetch('/api/caption', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ camera, lens, genre, tone, photoName }),
+      });
 
-      let mockOutput = '';
-      if (tone === 'インパクト・キャッチー') {
-        mockOutput = `世界が息をのんだ瞬間の【${genre}】。🔥\n\n一瞬の光と影。やっぱり ${camera} と ${lens} の組み合わせは反則級の描写力…！\n\nこの雰囲気、どうですか？コメントで教えてください👇\n\n------------------\nPhoto ${photoName}\nCam: ${camera}\nLens: ${lens}\n\n#${genre} #${camera.replace(/\s+/g, '')} #ファインダー越しの私の世界 #キリトリセカイ`;
-      } else if (tone === 'テンション高め・ポップ') {
-        mockOutput = `ちょっと待って、凄すぎる【${genre}】写真撮れちゃった！！📸✨\n\nシャッター切った瞬間「勝った」って叫びそうになった件（笑）\n${camera} の色味が天才すぎてテンション爆上がりです最高🙌\n\n------------------\nPhoto ${photoName}\n#${genre} #カメラ散歩 #${camera.replace(/\s+/g, '')} #写真で伝えたい私の世界`;
+      const data = await res.json();
+      if (data.caption) {
+        setGeneratedCaption(data.caption);
       } else {
-        mockOutput = `日常の隙間に潜む、特別な空気感。【${genre}】\n\nふとした瞬間に惹かれてシャッターを切りました。${lens} 独特のやわらかい光の捉え方が心地いい。\n\n------------------\nPhoto ${photoName}\nCam: ${camera}\nLens: ${lens}\n\n#${genre} #ファインダー越しの私の世界 #スナップ写真 #エモい写真`;
+        throw new Error();
       }
-
-      setGeneratedCaption(mockOutput);
     } catch (e) {
-      alert('生成に失敗しました。');
+      alert('キャプション生成に失敗しました。時間をおいて再試行してください。');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // スマホ標準共有シート起動
+  const handleShare = async () => {
+    if (!processedImageUrl) return;
+    try {
+      const blob = await (await fetch(processedImageUrl)).blob();
+      const file = new File([blob], 'snap-report.jpg', { type: 'image/jpeg' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'SnapReport Photo',
+          text: generatedCaption,
+        });
+      } else {
+        const a = document.createElement('a');
+        a.href = processedImageUrl;
+        a.download = 'snap-report.jpg';
+        a.click();
+      }
+    } catch (e) {
+      console.log('Shared cancelled');
     }
   };
 
@@ -194,7 +213,6 @@ export default function SnapReportPage() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-4 sm:p-8 font-sans max-w-3xl mx-auto">
-      {/* ヘッダー：SNAP REPORT AI の AI を削除 */}
       <header className="mb-8 text-center">
         <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
           SnapReport
@@ -203,65 +221,86 @@ export default function SnapReportPage() {
       </header>
 
       <div className="space-y-6">
-        {/* 1. 撮影情報 */}
+        {/* 1. 機材設定 */}
         <section className="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-4">
           <h2 className="text-lg font-bold text-slate-200 border-b border-slate-700 pb-2">1. 撮影情報</h2>
 
-          {/* カメラ選択（プルダウン ＋ 直接入力） */}
+          {/* カメラ */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1">カメラ (選択または入力)</label>
-            <select
-              value={savedCameras.includes(camera) ? camera : 'custom'}
-              onChange={(e) => {
-                if (e.target.value !== 'custom') setCamera(e.target.value);
-              }}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm mb-2 text-slate-200"
-            >
-              {savedCameras.map((item, i) => (
-                <option key={i} value={item}>{item}</option>
-              ))}
-              <option value="custom">＋ 直接入力する...</option>
-            </select>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">カメラ</label>
             <input
               type="text"
               value={camera}
               onChange={(e) => setCamera(e.target.value)}
-              placeholder="例: Canon EOS RP / Yashica Electro 35"
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500"
+              placeholder="例: Canon EOS RP"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 mb-2"
             />
+            {/* チップ履歴 */}
+            <div className="flex flex-wrap gap-1.5">
+              {savedCameras.map((c) => (
+                <span
+                  key={c}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs cursor-pointer border ${
+                    camera === c ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-900 border-slate-700 text-slate-300'
+                  }`}
+                  onClick={() => setCamera(c)}
+                >
+                  {c}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeHistory('camera', c);
+                    }}
+                    className="hover:text-red-400 font-bold ml-1"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
           </div>
 
-          {/* レンズ選択（プルダウン ＋ 直接入力） */}
+          {/* レンズ */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1">レンズ (選択または入力)</label>
-            <select
-              value={savedLenses.includes(lens) ? lens : 'custom'}
-              onChange={(e) => {
-                if (e.target.value !== 'custom') setLens(e.target.value);
-              }}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm mb-2 text-slate-200"
-            >
-              {savedLenses.map((item, i) => (
-                <option key={i} value={item}>{item}</option>
-              ))}
-              <option value="custom">＋ 直接入力する...</option>
-            </select>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">レンズ</label>
             <input
               type="text"
               value={lens}
               onChange={(e) => setLens(e.target.value)}
               placeholder="例: Super-Takumar 50mm F1.4"
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 mb-2"
             />
+            <div className="flex flex-wrap gap-1.5">
+              {savedLenses.map((l) => (
+                <span
+                  key={l}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs cursor-pointer border ${
+                    lens === l ? 'bg-blue-600 border-blue-400 text-white' : 'bg-slate-900 border-slate-700 text-slate-300'
+                  }`}
+                  onClick={() => setLens(l)}
+                >
+                  {l}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeHistory('lens', l);
+                    }}
+                    className="hover:text-red-400 font-bold ml-1"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
           </div>
 
-          {/* 写真ジャンル（画像には入らずAI参考にのみ使用） */}
+          {/* ジャンル */}
           <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1">写真のジャンル (文章作成用)</label>
+            <label className="block text-xs font-semibold text-slate-400 mb-1">写真のジャンル (文章用)</label>
             <select
               value={genre}
               onChange={(e) => setGenre(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-200"
             >
               {genreOptions.map((g) => (
                 <option key={g} value={g}>{g}</option>
@@ -269,6 +308,7 @@ export default function SnapReportPage() {
             </select>
           </div>
 
+          {/* Photo表記名 */}
           <div>
             <label className="block text-xs font-semibold text-slate-400 mb-1">Photo 表記名</label>
             <div className="flex items-center gap-2">
@@ -277,22 +317,21 @@ export default function SnapReportPage() {
                 type="text"
                 value={photoName}
                 onChange={(e) => setPhotoName(e.target.value)}
-                placeholder="オーレリアン二郎"
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500"
               />
             </div>
           </div>
         </section>
 
-        {/* 2. 写真＆文字入れ設定 */}
+        {/* 2. 写真＆ウォーターマーク */}
         <section className="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-4">
-          <h2 className="text-lg font-bold text-slate-200 border-b border-slate-700 pb-2">2. 写真＆文字入れ（ウォーターマーク）</h2>
+          <h2 className="text-lg font-bold text-slate-200 border-b border-slate-700 pb-2">2. 写真＆文字入れ</h2>
 
           <input
             type="file"
             accept="image/*"
             onChange={handleImageChange}
-            className="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500 cursor-pointer"
+            className="block w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white cursor-pointer"
           />
 
           {imagePreview && (
@@ -304,7 +343,7 @@ export default function SnapReportPage() {
                     checked={showPhotoByOnImage}
                     onChange={(e) => setShowPhotoByOnImage(e.target.checked)}
                   />
-                  <span>Photo 名を入れる</span>
+                  <span>Photo 名</span>
                 </label>
                 <label className="flex items-center gap-2 bg-slate-900 p-2 rounded border border-slate-700 cursor-pointer">
                   <input
@@ -312,7 +351,7 @@ export default function SnapReportPage() {
                     checked={showCameraOnImage}
                     onChange={(e) => setShowCameraOnImage(e.target.checked)}
                   />
-                  <span>カメラ名を入れる</span>
+                  <span>カメラ名</span>
                 </label>
                 <label className="flex items-center gap-2 bg-slate-900 p-2 rounded border border-slate-700 cursor-pointer">
                   <input
@@ -320,10 +359,9 @@ export default function SnapReportPage() {
                     checked={showLensOnImage}
                     onChange={(e) => setShowLensOnImage(e.target.checked)}
                   />
-                  <span>レンズ名を入れる</span>
+                  <span>レンズ名</span>
                 </label>
                 <div className="bg-slate-900 p-2 rounded border border-slate-700">
-                  <span className="block text-slate-400 mb-1">表示位置</span>
                   <select
                     value={watermarkPosition}
                     onChange={(e) => setWatermarkPosition(e.target.value as any)}
@@ -339,47 +377,42 @@ export default function SnapReportPage() {
 
               {processedImageUrl && (
                 <div className="space-y-2">
-                  <p className="text-xs text-emerald-400 font-semibold">✨ 文字入れ済み画像（長押し保存可能）:</p>
                   <img
                     src={processedImageUrl}
                     alt="Processed"
                     className="w-full rounded-lg border border-slate-600 shadow-lg object-contain max-h-96"
                   />
-                  <a
-                    href={processedImageUrl}
-                    download="snap-report.jpg"
-                    className="inline-block w-full text-center bg-slate-700 hover:bg-slate-600 text-white text-xs py-2 rounded-lg font-medium transition"
+                  <button
+                    onClick={handleShare}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2.5 rounded-lg font-bold transition shadow"
                   >
-                    📥 文字入れ画像をダウンロード
-                  </a>
+                    📲 共有・写真に保存
+                  </button>
                 </div>
               )}
             </div>
           )}
         </section>
 
-        {/* 3. トーン＆AI生成 */}
+        {/* 3. キャプション設定 */}
         <section className="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-4">
-          <h2 className="text-lg font-bold text-slate-200 border-b border-slate-700 pb-2">3. キャプション設定</h2>
+          <h2 className="text-lg font-bold text-slate-200 border-b border-slate-700 pb-2">3. キャプション生成</h2>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-2">キャプションの雰囲気（トーン）</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {toneOptions.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setTone(opt.value)}
-                  className={`p-3 rounded-lg text-left text-xs font-medium transition border ${
-                    tone === opt.value
-                      ? 'bg-blue-600/30 border-blue-500 text-blue-200'
-                      : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {toneOptions.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setTone(opt.value)}
+                className={`p-3 rounded-lg text-left text-xs font-medium transition border ${
+                  tone === opt.value
+                    ? 'bg-blue-600/30 border-blue-500 text-blue-200'
+                    : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
 
           <button
@@ -387,15 +420,15 @@ export default function SnapReportPage() {
             disabled={loading}
             className="w-full bg-gradient-to-r from-blue-500 to-emerald-500 hover:from-blue-600 hover:to-emerald-600 text-white font-bold py-3.5 rounded-xl shadow-lg transition disabled:opacity-50"
           >
-            {loading ? '生成中...' : '✨ 目を引くコメントを生成する'}
+            {loading ? 'AIが思考中...' : generatedCaption ? '🔄 別案を出す' : '✨ キャプションを生成する'}
           </button>
         </section>
 
-        {/* 4. 結果表示＆コピー */}
+        {/* 4. 生成結果 */}
         {generatedCaption && (
           <section className="bg-slate-800 p-5 rounded-xl border border-slate-700 space-y-3">
             <div className="flex justify-between items-center border-b border-slate-700 pb-2">
-              <h2 className="text-lg font-bold text-slate-200">完成したキャプション</h2>
+              <h2 className="text-lg font-bold text-slate-200">生成結果 (編集可能)</h2>
               <button
                 onClick={handleCopy}
                 className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition"
@@ -404,10 +437,10 @@ export default function SnapReportPage() {
               </button>
             </div>
             <textarea
-              readOnly
               value={generatedCaption}
+              onChange={(e) => setGeneratedCaption(e.target.value)}
               rows={10}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 leading-relaxed focus:outline-none"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 leading-relaxed focus:outline-none focus:border-blue-500"
             />
           </section>
         )}
