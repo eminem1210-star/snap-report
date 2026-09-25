@@ -54,26 +54,58 @@ ${displayInfoText || '- 撮影スナップ'}
       ];
     }
 
-    // 正式な最新モデル `gemini-3.5-flash` を指定
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
-      contents: contents,
-    });
+    let response: any = null;
+    let lastError: any = null;
+    const maxRetries = 3;
+
+    // 混雑エラー（503や429）が発生した場合に自動で数秒空けて再試行するループ
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        response = await ai.models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: contents,
+        });
+        break; // 成功したらループを抜ける
+      } catch (err: any) {
+        lastError = err;
+        const errStr = JSON.stringify(err);
+        // 503 (UNAVAILABLE) または 429 (TooManyRequests / high demand) の場合のみリトライ
+        if (errStr.includes('503') || errStr.includes('429') || errStr.includes('high demand') || errStr.includes('UNAVAILABLE')) {
+          if (attempt < maxRetries) {
+            // 試行回数に応じて待機時間を長くする（2秒、4秒…）
+            await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+            continue;
+          }
+        }
+        break; // その他のエラーやリトライ回数上限ならループ終了
+      }
+    }
+
+    if (!response) {
+      const errMessage = lastError?.message || JSON.stringify(lastError);
+      if (errMessage.includes('503') || errMessage.includes('high demand') || errMessage.includes('UNAVAILABLE')) {
+        return NextResponse.json(
+          { error: '現在AIサーバーが非常に混雑しています。少し時間（1〜2分）を置いてから再度お試しください。' },
+          { status: 503 }
+        );
+      }
+      if (errMessage.includes('429') || errMessage.includes('Quota exceeded')) {
+        return NextResponse.json(
+          { error: 'APIの利用回数制限に達しました。少し時間を置いてから再度お試しください。' },
+          { status: 429 }
+        );
+      }
+      return NextResponse.json(
+        { error: `キャプション生成中にエラーが発生しました: ${errMessage}` },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ caption: response.text });
   } catch (error: any) {
     console.error('API Error Detail:', error);
-    const errMessage = error?.message || '';
-    
-    if (errMessage.includes('Quota exceeded') || errMessage.includes('429')) {
-      return NextResponse.json(
-        { error: 'APIの利用回数制限に達しました。少し時間を置いてから再度お試しください。' },
-        { status: 429 }
-      );
-    }
-    
     return NextResponse.json(
-      { error: errMessage || 'キャプション生成中にエラーが発生しました。' },
+      { error: error?.message || 'キャプション生成中にエラーが発生しました。' },
       { status: 500 }
     );
   }
