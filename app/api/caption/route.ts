@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
 const apiKey = process.env.GEMINI_API_KEY;
 
@@ -13,25 +13,19 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    
-    // 実際に受け取ったデータをサーバーログに出力して確認
-    console.log('--- Received API Request Body Keys ---:', Object.keys(body));
 
-    // あらゆるプロパティ名から画像データを探索
     let rawImageData =
       body.image ||
       body.imageUrl ||
       body.imageData ||
       body.image_url ||
       body.file ||
-      body.base64 ||
-      (typeof body === 'string' ? body : null);
+      body.base64;
 
-    // 画像が取れなかった場合でも、テキスト情報のみで Gemini を呼び出すフォールバック処理
     const { title, camera, lens, genre, tone } = body;
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    // 最新 SDK の初期化
+    const ai = new GoogleGenAI({ apiKey });
 
     const prompt = `
 以下の写真および撮影条件に基づいて、SNS（InstagramやXなど）投稿用の魅力的でセンスの良いキャプションを作成してください。
@@ -48,10 +42,9 @@ export async function POST(req: Request) {
 - 適切なハッシュタグ（5〜8個程度）
 `;
 
-    let result;
+    let response;
 
     if (rawImageData && typeof rawImageData === 'string' && rawImageData.length > 50) {
-      // 画像データが存在する場合
       const base64Data = rawImageData.includes('base64,')
         ? rawImageData.split('base64,')[1]
         : rawImageData;
@@ -60,23 +53,26 @@ export async function POST(req: Request) {
         ? 'image/png'
         : 'image/jpeg';
 
-      const imagePart = {
-        inlineData: {
-          data: base64Data,
-          mimeType: mimeType,
-        },
-      };
-
-      result = await model.generateContent([prompt, imagePart]);
+      response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: [
+          prompt,
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: mimeType,
+            },
+          },
+        ],
+      });
     } else {
-      // 画像データが見つからない場合でも、テキストプロンプトのみでAIを動かす
-      console.log('Image data missing, running text-only prompt fallback.');
-      result = await model.generateContent(prompt);
+      response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+      });
     }
 
-    const responseText = result.response.text();
-    return NextResponse.json({ caption: responseText });
-
+    return NextResponse.json({ caption: response.text });
   } catch (error: any) {
     console.error('Gemini API Error Detail:', error);
     return NextResponse.json(
