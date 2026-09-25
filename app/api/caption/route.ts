@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const apiKey = process.env.GEMINI_API_KEY;
 
@@ -14,6 +14,7 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
+    const { title, camera, lens, genre, tone } = body;
     let rawImageData =
       body.image ||
       body.imageUrl ||
@@ -22,18 +23,17 @@ export async function POST(req: Request) {
       body.file ||
       body.base64;
 
-    const { title, camera, lens, genre, tone } = body;
-
-    // 最新 SDK の初期化
-    const ai = new GoogleGenAI({ apiKey });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    // 確実に動作するモデル名に固定
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
     const prompt = `
-以下の写真および撮影条件に基づいて、SNS（InstagramやXなど）投稿用の魅力的でセンスの良いキャプションを作成してください。
+以下の写真および撮影条件に基づいて、SNS投稿用の魅力的でセンスの良いキャプションを作成してください。
 
 【写真情報】
-- タイトル/主題: ${title || 'ブルーインパルス'}
-- 撮影カメラ: ${camera || 'Canon EOS RP'}
-- 使用レンズ: ${lens || 'RF28-70mm F2.8'}
+- タイトル/主題: ${title || 'なし'}
+- 撮影カメラ: ${camera || '未指定'}
+- 使用レンズ: ${lens || '未指定'}
 - ジャンル: ${genre || 'スナップ'}
 - 雰囲気/トーン: ${tone || 'かっこいい'}
 
@@ -42,20 +42,19 @@ export async function POST(req: Request) {
 - 適切なハッシュタグ（5〜8個程度）
 `;
 
-    let response;
+    let result;
 
     if (rawImageData && typeof rawImageData === 'string' && rawImageData.length > 50) {
-      const base64Data = rawImageData.includes('base64,')
-        ? rawImageData.split('base64,')[1]
-        : rawImageData;
+      try {
+        const base64Data = rawImageData.includes('base64,')
+          ? rawImageData.split('base64,')[1]
+          : rawImageData;
 
-      const mimeType = rawImageData.includes('data:image/png')
-        ? 'image/png'
-        : 'image/jpeg';
+        const mimeType = rawImageData.includes('data:image/png')
+          ? 'image/png'
+          : 'image/jpeg';
 
-      response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: [
+        result = await model.generateContent([
           prompt,
           {
             inlineData: {
@@ -63,16 +62,18 @@ export async function POST(req: Request) {
               mimeType: mimeType,
             },
           },
-        ],
-      });
+        ]);
+      } catch (imgErr) {
+        // 画像解析でエラーが出てもフォールバックしてテキストのみで生成
+        console.warn('Image analysis failed, fallback to text-only:', imgErr);
+        result = await model.generateContent(prompt);
+      }
     } else {
-      response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: prompt,
-      });
+      result = await model.generateContent(prompt);
     }
 
-    return NextResponse.json({ caption: response.text });
+    const responseText = result.response.text();
+    return NextResponse.json({ caption: responseText });
   } catch (error: any) {
     console.error('Gemini API Error Detail:', error);
     return NextResponse.json(
