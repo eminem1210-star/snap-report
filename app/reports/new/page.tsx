@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 
-// メーカーごとのレンズデータ
+// メーカーごとの豊富なレンズデータ
 const LENS_DATA: { [key: string]: string[] } = {
   'Canon (RFマウント)': [
     'RF28-70mm F2.8 IS STM',
@@ -48,6 +48,7 @@ export default function NewReportPage() {
   const [genre, setGenre] = useState('鉄道・航空');
   const [tone, setTone] = useState('爽やか・透明感');
   const [image, setImage] = useState('');
+  const [imagePreview, setImagePreview] = useState('');
   const [caption, setCaption] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -56,10 +57,11 @@ export default function NewReportPage() {
     setSelectedLens(LENS_DATA[maker]?.[0] || '');
   };
 
-  // 容量オーバー（413エラー）を防ぐため、画像を読み込む際に自動で縮小する処理
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    setImagePreview(URL.createObjectURL(file));
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -88,7 +90,6 @@ export default function NewReportPage() {
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
         
-        // 圧縮したBase64データをセット
         setImage(canvas.toDataURL('image/jpeg', 0.8));
       };
       img.src = event.target?.result as string;
@@ -125,77 +126,145 @@ export default function NewReportPage() {
   };
 
   return (
-    <div className="p-6 max-w-2xl mx-auto text-white">
-      <h1 className="text-xl font-bold mb-4">SNAP REPORT - キャプション生成</h1>
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
+      <div className="max-w-3xl mx-auto space-y-6">
+        <header className="border-b border-slate-800 pb-4">
+          <h1 className="text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-500">
+            SNAP REPORT — キャプションジェネレーター
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">写真と撮影条件から、SNSで映える魅力的な文章を自動生成します。</p>
+        </header>
 
-      {/* 画像アップロード */}
-      <label className="block mb-2">写真アップロード</label>
-      <input
-        type="file"
-        accept="image/*"
-        onChange={handleImageChange}
-        className="w-full p-2 bg-gray-800 rounded mb-4"
-      />
+        {/* 1. 写真 & 設定エリア */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <h2 className="text-lg font-bold text-cyan-400">1. 写真 &amp; 撮影条件の設定</h2>
 
-      {/* タイトル */}
-      <label className="block mb-2">写真タイトル</label>
-      <input
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="例: ブルーインパルスと快晴の空"
-        className="w-full p-2 bg-gray-800 rounded mb-4"
-      />
+          <div>
+            <label className="block text-sm font-medium mb-1 text-slate-300">写真アップロード</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-cyan-600 file:text-white hover:file:bg-cyan-500 cursor-pointer bg-slate-950/50 p-2 rounded-xl border border-slate-800"
+            />
+          </div>
 
-      {/* カメラ選択 */}
-      <label className="block mb-2">撮影カメラ</label>
-      <select
-        value={camera}
-        onChange={(e) => setCamera(e.target.value)}
-        className="w-full p-2 bg-gray-800 rounded mb-4"
-      >
-        <option>Canon EOS RP</option>
-        <option>Canon EOS 6D</option>
-        <option>Google Pixel 9a</option>
-      </select>
+          {imagePreview && (
+            <div className="mt-2 relative w-full h-48 rounded-xl overflow-hidden border border-slate-800 bg-slate-950 flex items-center justify-center">
+              <img src={imagePreview} alt="Preview" className="h-full object-contain" />
+            </div>
+          )}
 
-      {/* メーカー選択 */}
-      <label className="block mb-2">レンズメーカー</label>
-      <select
-        value={selectedMaker}
-        onChange={(e) => handleMakerChange(e.target.value)}
-        className="w-full p-2 bg-gray-800 rounded mb-4"
-      >
-        {Object.keys(LENS_DATA).map((maker) => (
-          <option key={maker} value={maker}>{maker}</option>
-        ))}
-      </select>
+          <div>
+            <label className="block text-sm font-medium mb-1 text-slate-300">写真タイトル / 主題</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="例: ブルーインパルスと青空の軌跡"
+              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
+            />
+          </div>
 
-      {/* レンズ選択（メーカーに連動） */}
-      <label className="block mb-2">使用レンズ</label>
-      <select
-        value={selectedLens}
-        onChange={(e) => setSelectedLens(e.target.value)}
-        className="w-full p-2 bg-gray-800 rounded mb-4"
-      >
-        {LENS_DATA[selectedMaker]?.map((lens) => (
-          <option key={lens} value={lens}>{lens}</option>
-        ))}
-      </select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1 text-slate-300">撮影カメラ</label>
+              <select
+                value={camera}
+                onChange={(e) => setCamera(e.target.value)}
+                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
+              >
+                <option>Canon EOS RP</option>
+                <option>Canon EOS 6D</option>
+                <option>Google Pixel 9a</option>
+                <option>α-303si</option>
+                <option>Yashica Electro 35</option>
+              </select>
+            </div>
 
-      <button
-        onClick={handleGenerate}
-        disabled={loading}
-        className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded font-bold mb-6"
-      >
-        {loading ? 'Gemini AIが写真を解析中...' : 'キャプションを生成する'}
-      </button>
+            <div>
+              <label className="block text-sm font-medium mb-1 text-slate-300">ジャンル</label>
+              <select
+                value={genre}
+                onChange={(e) => setGenre(e.target.value)}
+                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
+              >
+                <option>鉄道・航空</option>
+                <option>スナップ</option>
+                <option>ポートレート</option>
+                <option>風景・ネイチャー</option>
+                <option>植物・ガジェット</option>
+              </select>
+            </div>
+          </div>
 
-      {caption && (
-        <div className="p-4 bg-gray-900 rounded border border-gray-700 whitespace-pre-wrap">
-          {caption}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1 text-slate-300">レンズメーカー</label>
+              <select
+                value={selectedMaker}
+                onChange={(e) => handleMakerChange(e.target.value)}
+                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
+              >
+                {Object.keys(LENS_DATA).map((maker) => (
+                  <option key={maker} value={maker}>{maker}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1 text-slate-300">使用レンズ（詳細）</label>
+              <select
+                value={selectedLens}
+                onChange={(e) => setSelectedLens(e.target.value)}
+                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
+              >
+                {LENS_DATA[selectedMaker]?.map((lens) => (
+                  <option key={lens} value={lens}>{lens}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1 text-slate-300">トーン / 雰囲気</label>
+            <select
+              value={tone}
+              onChange={(e) => setTone(e.target.value)}
+              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
+            >
+              <option>爽やか・透明感</option>
+              <option>かっこいい・重厚感</option>
+              <option>エモく・ノスタルジック</option>
+              <option>鮮やか・ポップ</option>
+            </select>
+          </div>
+
+          <button
+            onClick={handleGenerate}
+            disabled={loading}
+            className="w-full py-4 mt-2 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg transition-all duration-200 disabled:opacity-50 cursor-pointer"
+          >
+            {loading ? '✨ Gemini AIが写真を解析中...' : '✨ キャプションを生成する'}
+          </button>
         </div>
-      )}
+
+        {/* 2. 出力結果エリア */}
+        {caption && (
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3">
+            <h2 className="text-lg font-bold text-cyan-400">2. 生成されたキャプション</h2>
+            <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl whitespace-pre-wrap text-slate-200 leading-relaxed font-sans">
+              {caption}
+            </div>
+            <button
+              onClick={() => navigator.clipboard.writeText(caption)}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-lg transition"
+            >
+              📋 クリップボードにコピー
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
