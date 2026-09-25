@@ -4,11 +4,13 @@ import { GoogleGenAI } from '@google/genai';
 const apiKey = process.env.GEMINI_API_KEY;
 
 // 混雑時（503等）に自動で数回リトライするヘルパー関数
-async function generateWithRetry(ai: GoogleGenAI, params: any, retries = 3, delay = 1500) {
+async function generateWithRetry(ai: GoogleGenAI, params: any, retries = 3, delay = 1500): Promise<any> {
   for (let i = 0; i < retries; i++) {
     try {
       const response = await ai.models.generateContent(params);
-      return response;
+      if (response) {
+        return response;
+      }
     } catch (error: any) {
       const isOverloaded = 
         error?.status === 503 || 
@@ -24,6 +26,7 @@ async function generateWithRetry(ai: GoogleGenAI, params: any, retries = 3, dela
       throw error;
     }
   }
+  throw new Error('モデルからの応答を取得できませんでした。');
 }
 
 export async function POST(req: Request) {
