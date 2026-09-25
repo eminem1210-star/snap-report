@@ -1,76 +1,70 @@
 import { NextResponse } from 'next/server';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function POST(req: Request) {
   try {
     const { camera, lens, genre, tone, photoName, imageBase64 } = await req.json();
 
     const apiKey = process.env.GEMINI_API_KEY;
-
     if (!apiKey) {
-      return NextResponse.json({
-        caption: `【${genre}】${tone}なひとコマ。✨\n\n一瞬の光を切り取りました。${camera ? `（${camera}）` : ''}\n\n------------------\n${photoName ? `Photo ${photoName}\n` : ''}${camera ? `Cam: ${camera}\n` : ''}${lens ? `Lens: ${lens}\n` : ''}\n#${genre} #ファインダー越しの私の世界 #写真好きな人と繋がりたい`,
-      });
+      return NextResponse.json(
+        { error: 'GEMINI_API_KEY が環境変数に設定されていません。' },
+        { status: 500 }
+      );
     }
 
-    const prompt = `あなたはSNSで人気のプロフォトグラファーです。
-ユーザーから提供された写真の情報（機材・ジャンル・雰囲気）をもとに、SNS（InstagramやX/Twitter）で注目を集めるような魅力的で自然な投稿用キャプションを作成してください。
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-【設定条件】
-・文章のトーン: ${tone}
-・写真ジャンル: ${genre}
-・使用カメラ: ${camera || '未設定'}
-・使用レンズ: ${lens || '未設定'}
-・撮影者クレジット: ${photoName || '未設定'}
+    const prompt = `
+あなたはプロの写真家兼SNSプロデューサーです。
+提供された画像と以下の撮影データをもとに、InstagramやX(Twitter)で目を引く最高におしゃれな写真キャプションを生成してください。
 
-【出力ルール】
-1. 指定されたトーン（${tone}）に合わせて、撮影時の情景や想いが伝わる印象的な本文（2〜4文）を作成してください。
-2. 読んだ人が共感したりコメントしたくなるような、自然な日本語にしてください。
-3. 適度に絵文字や改行を入れて読みやすくしてください。
-4. 本文の後に「------------------」で区切りを入れ、撮影クレジット（Photo名, Cam, Lens）を記載してください。
-5. 最後にハッシュタグを6〜8個ほど生成してください（例: #写真好きな人と繋がりたい #ファインダー越しの私の世界 など）。`;
+【撮影・写真データ】
+- 写真タイトル: ${photoName || '未指定'}
+- カメラ: ${camera || '未指定'}
+- レンズ: ${lens || '未指定'}
+- ジャンル: ${genre || '未指定'}
+- トーン/雰囲気: ${tone || '未指定'}
 
-    const contents: any[] = [{ parts: [] }];
+【指示】
+1. 画像に写っている被写体、構図、色合い、光の入り方を深く観察して文章に反映してください。
+2. 雰囲気が「${tone}」にぴったり合うような言葉遣いや絵文字を選んでください。
+3. 出力フォーマットは以下の構成にしてください：
 
-    // 画像が添付されている場合は画像データも送る
-    if (imageBase64) {
-      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
-      contents[0].parts.push({
+【タイトル・キャッチコピー】（絵文字を含めた印象的な短文）
+【本文】（画像に写っているものの表現と感情を込めた2〜3行の描写）
+
+------------------
+Photo: ${photoName || 'タイトルなし'}
+Cam: ${camera}
+Lens: ${lens}
+
+#${genre} #${tone.replace(/・/g, '')} #ファインダー越しの私の世界 #写真好きな人と繋がりたい
+`;
+
+    const contents: any[] = [prompt];
+
+    if (imageBase64 && imageBase64.includes('base64,')) {
+      const base64Data = imageBase64.split('base64,')[1];
+      const mimeType = imageBase64.split(';')[0].split(':')[1] || 'image/jpeg';
+
+      contents.push({
         inlineData: {
-          mimeType: 'image/jpeg',
           data: base64Data,
+          mimeType: mimeType,
         },
       });
     }
 
-    contents[0].parts.push({ text: prompt });
+    const result = await model.generateContent(contents);
+    const responseText = result.response.text();
 
-    // モデル名を gemini-1.5-flash に指定
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents }),
-      }
-    );
-
-    const data = await response.json();
-
-    // APIからエラーが返ってきた場合ログを記録
-    if (!response.ok) {
-      console.error('Gemini API Error:', data);
-      throw new Error(data.error?.message || 'API request failed');
-    }
-
-    const caption = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!caption) throw new Error('No caption generated');
-
-    return NextResponse.json({ caption });
+    return NextResponse.json({ caption: responseText });
   } catch (error: any) {
-    console.error('Caption generation error:', error);
+    console.error('Gemini API Error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to generate caption' },
+      { error: error.message || 'キャプションの生成中にエラーが発生しました。' },
       { status: 500 }
     );
   }
