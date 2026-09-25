@@ -6,10 +6,15 @@ const apiKey = process.env.GEMINI_API_KEY;
 export async function POST(req: Request) {
   try {
     if (!apiKey) {
-      return NextResponse.json({ error: 'APIキーが未設定です' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'GEMINI_API_KEY が設定されていません。' },
+        { status: 500 }
+      );
     }
 
-    const { title, camera, lens, genre, tone } = await req.json();
+    const body = await req.json();
+    const { title, camera, lens, genre, tone, image } = body;
+
     const ai = new GoogleGenAI({ apiKey });
 
     const prompt = `
@@ -17,9 +22,9 @@ export async function POST(req: Request) {
 
 【写真情報】
 - タイトル/主題: ${title || '航空写真'}
-- カメラ: ${camera || '未指定'}
+- カメラ: ${camera || 'Canon EOS RP'}
 - レンズ: ${lens || '未指定'}
-- ジャンル: ${genre || 'スナップ'}
+- ジャンル: ${genre || '鉄道・航空'}
 - トーン: ${tone || 'かっこいい'}
 
 【重要指示】
@@ -29,13 +34,54 @@ export async function POST(req: Request) {
 3. その他、カメラ・レンズ・ジャンルに合わせたトレンドのタグを5〜8個ほど追加してください。
 `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: prompt,
-    });
+    // 画像データがある場合はマルチモーダル用の構成にする
+    let contents: any = prompt;
+    if (image && typeof image === 'string' && image.length > 100) {
+      const base64Data = image.includes('base64,') ? image.split('base64,')[1] : image;
+      const mimeType = image.includes('data:image/png') ? 'image/png' : 'image/jpeg';
 
-    return NextResponse.json({ caption: response.text });
+      contents = [
+        prompt,
+        {
+          inlineData: {
+            data: base64Data,
+            mimeType: mimeType,
+          },
+        },
+      ];
+    }
+
+    // 複数のモデルを順番に試すことで、どれか一つが確実にヒットするようにする
+    const modelsToTry = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+    let responseText = '';
+    let lastError = null;
+
+    for (const modelName of modelsToTry) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents: contents,
+        });
+        if (response && response.text) {
+          responseText = response.text;
+          break;
+        }
+      } catch (err: any) {
+        console.warn(`Model ${modelName} failed:`, err?.message);
+        lastError = err;
+      }
+    }
+
+    if (!responseText) {
+      throw lastError || new Error('すべての Gemini モデルの呼び出しに失敗しました。');
+    }
+
+    return NextResponse.json({ caption: responseText });
   } catch (error: any) {
-    return NextResponse.json({ error: error?.message || 'エラーが発生しました' }, { status: 500 });
+    console.error('API Server Error Detail:', error);
+    return NextResponse.json(
+      { error: error?.message || 'サーバー内部でエラーが発生しました。' },
+      { status: 500 }
+    );
   }
 }
