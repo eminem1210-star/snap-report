@@ -23,7 +23,6 @@ export async function POST(req: Request) {
       body.file ||
       body.base64;
 
-    // 最新 SDK の初期化
     const ai = new GoogleGenAI({ apiKey });
 
     const prompt = `
@@ -43,6 +42,7 @@ export async function POST(req: Request) {
 
     let response;
 
+    // API側から推奨されている最新モデル「gemini-2.5-flash」を使用
     if (rawImageData && typeof rawImageData === 'string' && rawImageData.length > 50) {
       try {
         const base64Data = rawImageData.includes('base64,')
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
           : 'image/jpeg';
 
         response = await ai.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           contents: [
             prompt,
             {
@@ -68,13 +68,13 @@ export async function POST(req: Request) {
       } catch (imgErr) {
         console.warn('Image analysis failed, fallback to text-only:', imgErr);
         response = await ai.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           contents: prompt,
         });
       }
     } else {
       response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-flash',
         contents: prompt,
       });
     }
