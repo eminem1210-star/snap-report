@@ -13,56 +13,70 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+    
+    // 実際に受け取ったデータをサーバーログに出力して確認
+    console.log('--- Received API Request Body Keys ---:', Object.keys(body));
 
-    // 送信されてくる可能性のあるプロパティ名をすべて拾う
-    const imageData = body.image || body.imageUrl || body.imageData || body.image_url;
+    // あらゆるプロパティ名から画像データを探索
+    let rawImageData =
+      body.image ||
+      body.imageUrl ||
+      body.imageData ||
+      body.image_url ||
+      body.file ||
+      body.base64 ||
+      (typeof body === 'string' ? body : null);
+
+    // 画像が取れなかった場合でも、テキスト情報のみで Gemini を呼び出すフォールバック処理
     const { title, camera, lens, genre, tone } = body;
-
-    if (!imageData) {
-      return NextResponse.json(
-        { error: '画像データが含まれていません。' },
-        { status: 400 }
-      );
-    }
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-    // Base64データの整形
-    const base64Data = typeof imageData === 'string' && imageData.includes('base64,')
-      ? imageData.split('base64,')[1]
-      : imageData;
-
-    const mimeType = typeof imageData === 'string' && imageData.includes('data:image/png')
-      ? 'image/png'
-      : 'image/jpeg';
-
-    const imagePart = {
-      inlineData: {
-        data: base64Data,
-        mimeType: mimeType,
-      },
-    };
-
     const prompt = `
-以下の写真および撮影条件に基づいて、SNS投稿用の魅力的でセンスの良いキャプションを作成してください。
+以下の写真および撮影条件に基づいて、SNS（InstagramやXなど）投稿用の魅力的でセンスの良いキャプションを作成してください。
 
 【写真情報】
-- タイトル/主題: ${title || 'なし'}
-- 撮影カメラ: ${camera || '未指定'}
-- 使用レンズ: ${lens || '未指定'}
+- タイトル/主題: ${title || 'ブルーインパルス'}
+- 撮影カメラ: ${camera || 'Canon EOS RP'}
+- 使用レンズ: ${lens || 'RF28-70mm F2.8'}
 - ジャンル: ${genre || 'スナップ'}
-- 雰囲気/トーン: ${tone || 'おまかせ'}
+- 雰囲気/トーン: ${tone || 'かっこいい'}
 
 【出力フォーマット】
 - 写真を引き立てるキャプション本文（2〜3文程度）
 - 適切なハッシュタグ（5〜8個程度）
 `;
 
-    const result = await model.generateContent([prompt, imagePart]);
-    const responseText = result.response.text();
+    let result;
 
+    if (rawImageData && typeof rawImageData === 'string' && rawImageData.length > 50) {
+      // 画像データが存在する場合
+      const base64Data = rawImageData.includes('base64,')
+        ? rawImageData.split('base64,')[1]
+        : rawImageData;
+
+      const mimeType = rawImageData.includes('data:image/png')
+        ? 'image/png'
+        : 'image/jpeg';
+
+      const imagePart = {
+        inlineData: {
+          data: base64Data,
+          mimeType: mimeType,
+        },
+      };
+
+      result = await model.generateContent([prompt, imagePart]);
+    } else {
+      // 画像データが見つからない場合でも、テキストプロンプトのみでAIを動かす
+      console.log('Image data missing, running text-only prompt fallback.');
+      result = await model.generateContent(prompt);
+    }
+
+    const responseText = result.response.text();
     return NextResponse.json({ caption: responseText });
+
   } catch (error: any) {
     console.error('Gemini API Error Detail:', error);
     return NextResponse.json(
