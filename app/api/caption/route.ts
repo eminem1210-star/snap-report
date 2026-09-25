@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'GEMINI_API_KEY が環境変数に設定されていません。' },
+        { error: 'Vercelの環境変数 GEMINI_API_KEY が読み込めていません。' },
         { status: 500 }
       );
     }
@@ -40,7 +40,7 @@ Photo: ${photoName || 'タイトルなし'}
 Cam: ${camera}
 Lens: ${lens}
 
-#${genre} #${tone.replace(/・/g, '')} #ファインダー越しの私の世界 #写真好きな人と繋がりたい
+#${genre} #${tone ? tone.replace(/・/g, '') : ''} #ファインダー越しの私の世界 #写真好きな人と繋がりたい
 `;
 
     const contents: any[] = [prompt];
@@ -62,9 +62,9 @@ Lens: ${lens}
 
     return NextResponse.json({ caption: responseText });
   } catch (error: any) {
-    console.error('Gemini API Error:', error);
+    console.error('Gemini API Details Error:', error);
     return NextResponse.json(
-      { error: error.message || 'キャプションの生成中にエラーが発生しました。' },
+      { error: `API呼び出し失敗: ${error?.message || JSON.stringify(error)}` },
       { status: 500 }
     );
   }
