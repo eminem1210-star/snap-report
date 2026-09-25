@@ -1,55 +1,95 @@
 'use client';
 import { useState } from 'react';
 
-// メーカーごとの豊富なレンズデータ
+// メーカーごとの豊富なレンズデータ（リクエストいただいたRF100-400等も追加）
 const LENS_DATA: { [key: string]: string[] } = {
   'Canon (RFマウント)': [
     'RF28-70mm F2.8 IS STM',
+    'RF100-400mm F5.6-8 IS USM',
     'RF24-105mm F4 L IS USM',
     'RF70-200mm F2.8 L IS USM',
     'RF100-500mm F4.5-7.1 L IS USM',
+    'RF200-800mm F6.3-9 IS USM',
     'RF50mm F1.8 STM',
+    'RF35mm F1.8 Macro IS STM',
   ],
   'Canon (EFマウント)': [
     'EF24-70mm F2.8L II USM',
     'EF70-200mm F2.8L IS III USM',
     'EF100-400mm F4.5-5.6L IS II USM',
+    'EF400mm F5.6L USM',
     'EF50mm F1.8 STM',
   ],
   'Sony (Eマウント)': [
     'FE 24-70mm F2.8 GM II',
     'FE 70-200mm F2.8 GM OSS II',
     'FE 200-600mm F5.6-6.3 G OSS',
+    'FE 70-300mm F4.5-5.6 G OSS',
     'FE 50mm F1.4 GM',
+    'E 18-135mm F3.5-5.6 OSS',
   ],
   'Nikon (Zマウント)': [
     'NIKKOR Z 24-70mm f/2.8 S',
     'NIKKOR Z 70-200mm f/2.8 VR S',
     'NIKKOR Z 180-600mm f/5.6-6.3 VR',
+    'NIKKOR Z 100-400mm f/4.5-5.6 VR S',
+    'NIKKOR Z 40mm f/2',
   ],
-  'Tamron / Sigma (汎用)': [
+  'Fujifilm (Xマウント)': [
+    'XF16-55mmF2.8 R LM WR',
+    'XF50-140mmF2.8 R LM OIS WR',
+    'XF150-600mmF5.6-8 R LM OIS WR',
+    'XF35mmF1.4 R',
+    'XF27mmF2.8 R WR',
+  ],
+  'Tamron / Sigma / その他': [
     'タムロン 150-500mm F/5-6.7 Di III VC VXD',
+    'タムロン 50-400mm F/4.5-6.3 Di III VC VXD',
     'シグマ 60-600mm F4.5-6.3 DG DN OS | Sports',
     'シグマ 150-600mm F5-6.3 DG OS HSM',
   ],
-  'オールドレンズ・その他': [
+  'オールドレンズ・コンパクト': [
     'Super-Takumar 55mm F1.8',
+    'Super-Takumar 135mm F2.5',
     'Yashica Electro 35 (CC/GSN)',
     'Konica C35 EF',
-    'その他オールドレンズ',
+    'RICOH GRレンズ (内蔵)',
   ]
 };
+
+// 豊富なカメラ選択肢（RICOH GRや各種モデルを追加）
+const CAMERA_OPTIONS = [
+  'Canon EOS RP',
+  'Canon EOS 6D',
+  'Canon EOS R3',
+  'Canon EOS R5 / R5 Mark II',
+  'Canon EOS R6 Mark II',
+  'Canon EOS R7',
+  'Canon EOS R8',
+  'Sony α7 IV',
+  'Sony α7R V',
+  'Sony α1',
+  'Nikon Z8',
+  'Nikon Z6III',
+  'Fujifilm X-T5',
+  'Fujifilm X-H2',
+  'RICOH GR III',
+  'RICOH GR IIIx',
+  'Minolta α-303si (フィルム)',
+  'Yashica Electro 35 (フィルム)',
+  'Konica C35 EF (フィルム)',
+  'その他カメラ'
+];
 
 export default function NewReportPage() {
   const [selectedMaker, setSelectedMaker] = useState('Canon (RFマウント)');
   const [selectedLens, setSelectedLens] = useState('RF28-70mm F2.8 IS STM');
   const [title, setTitle] = useState('');
-  const [photographer, setPhotographer] = useState('深見 さら'); // 撮影者
+  const [photographer, setPhotographer] = useState('深見 さら');
   const [camera, setCamera] = useState('Canon EOS RP');
   const [genre, setGenre] = useState('鉄道・航空');
   const [tone, setTone] = useState('爽やか・透明感');
   
-  // 表示項目のチェックボックス状態
   const [showTitle, setShowTitle] = useState(true);
   const [showCamera, setShowCamera] = useState(true);
   const [showLens, setShowLens] = useState(true);
@@ -145,10 +185,9 @@ export default function NewReportPage() {
           <h1 className="text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-500">
             SNAP REPORT
           </h1>
-          <p className="text-sm text-slate-400 mt-1">レポート設定とキャプション自動生成</p>
+          <p className="text-sm text-slate-400 mt-1">レポート設定とキャプション自動生成（拡張版）</p>
         </header>
 
-        {/* レポート設定エリア */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
           <h2 className="text-lg font-bold text-cyan-400">レポート設定</h2>
 
@@ -168,7 +207,6 @@ export default function NewReportPage() {
             </div>
           )}
 
-          {/* 画像に含める項目のチェックボックス */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-slate-950 p-3 rounded-xl border border-slate-800 text-sm">
             <label className="flex items-center space-x-2 cursor-pointer">
               <input type="checkbox" checked={showTitle} onChange={(e) => setShowTitle(e.target.checked)} className="rounded bg-slate-900 border-slate-700 text-cyan-500" />
@@ -211,17 +249,27 @@ export default function NewReportPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1 text-slate-300">カメラ</label>
+              <label className="block text-sm font-medium mb-1 text-slate-300">カメラ（選択または直接入力）</label>
+              <select
+                value={camera}
+                onChange={(e) => setCamera(e.target.value)}
+                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100 mb-2"
+              >
+                {CAMERA_OPTIONS.map((cam) => (
+                  <option key={cam} value={cam}>{cam}</option>
+                ))}
+              </select>
               <input
                 type="text"
                 value={camera}
                 onChange={(e) => setCamera(e.target.value)}
-                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
+                placeholder="直接入力も可能"
+                className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:outline-none focus:border-cyan-500 text-slate-300"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1 text-slate-300">レンズメーカー</label>
+              <label className="block text-sm font-medium mb-1 text-slate-300">レンズメーカー / 系統</label>
               <select
                 value={selectedMaker}
                 onChange={(e) => handleMakerChange(e.target.value)}
@@ -235,16 +283,23 @@ export default function NewReportPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-300">レンズ</label>
+            <label className="block text-sm font-medium mb-1 text-slate-300">レンズ（詳細）</label>
             <select
               value={selectedLens}
               onChange={(e) => setSelectedLens(e.target.value)}
-              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
+              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100 mb-2"
             >
               {LENS_DATA[selectedMaker]?.map((lens) => (
                 <option key={lens} value={lens}>{lens}</option>
               ))}
             </select>
+            <input
+              type="text"
+              value={selectedLens}
+              onChange={(e) => setSelectedLens(e.target.value)}
+              placeholder="リストにない場合はここに直接入力できます"
+              className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:outline-none focus:border-cyan-500 text-slate-300"
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -287,7 +342,6 @@ export default function NewReportPage() {
           </button>
         </div>
 
-        {/* 出力結果エリア */}
         {caption && (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3">
             <h2 className="text-lg font-bold text-cyan-400">生成されたキャプション</h2>
