@@ -54,7 +54,7 @@ export async function POST(req: Request) {
         : 'image/jpeg';
 
       response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.0-flash',
         contents: [
           prompt,
           {
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       });
     } else {
       response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.0-flash',
         contents: prompt,
       });
     }
