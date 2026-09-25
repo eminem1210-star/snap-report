@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// 環境変数から API キーを取得
 const apiKey = process.env.GEMINI_API_KEY;
 
 export async function POST(req: Request) {
@@ -13,27 +12,28 @@ export async function POST(req: Request) {
       );
     }
 
-    const { image, title, camera, lens, genre, tone } = await req.json();
+    const body = await req.json();
 
-    if (!image) {
+    // 送信されてくる可能性のあるプロパティ名をすべて拾う
+    const imageData = body.image || body.imageUrl || body.imageData || body.image_url;
+    const { title, camera, lens, genre, tone } = body;
+
+    if (!imageData) {
       return NextResponse.json(
         { error: '画像データが含まれていません。' },
         { status: 400 }
       );
     }
 
-    // GoogleGenerativeAI の初期化
     const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // 安定稼働モデルの指定
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-    // Base64画像の整形処理
-    const base64Data = image.includes('base64,')
-      ? image.split('base64,')[1]
-      : image;
+    // Base64データの整形
+    const base64Data = typeof imageData === 'string' && imageData.includes('base64,')
+      ? imageData.split('base64,')[1]
+      : imageData;
 
-    const mimeType = image.includes('data:image/png')
+    const mimeType = typeof imageData === 'string' && imageData.includes('data:image/png')
       ? 'image/png'
       : 'image/jpeg';
 
@@ -44,9 +44,8 @@ export async function POST(req: Request) {
       },
     };
 
-    // プロンプトの構築
     const prompt = `
-以下の写真および撮影条件に基づいて、SNS（InstagramやXなど）投稿用の魅力的で魅力的なキャプションを作成してください。
+以下の写真および撮影条件に基づいて、SNS投稿用の魅力的でセンスの良いキャプションを作成してください。
 
 【写真情報】
 - タイトル/主題: ${title || 'なし'}
@@ -58,11 +57,8 @@ export async function POST(req: Request) {
 【出力フォーマット】
 - 写真を引き立てるキャプション本文（2〜3文程度）
 - 適切なハッシュタグ（5〜8個程度）
-
-自然でセンスのある日本語で出力してください。
 `;
 
-    // API呼び出し
     const result = await model.generateContent([prompt, imagePart]);
     const responseText = result.response.text();
 
