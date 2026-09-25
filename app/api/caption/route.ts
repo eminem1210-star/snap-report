@@ -40,10 +40,13 @@ export async function POST(req: Request) {
 - 適切なハッシュタグ(5〜8個程度)
 `;
 
+    const primaryModel = 'gemini-3.8-flash';
+    const fallbackModel = 'gemini-3.5-flash-lite'; // 正しいLiteモデルを指定
+
     let response;
 
-    if (rawImageData && typeof rawImageData === 'string' && rawImageData.length > 50) {
-      try {
+    const generateWithModel = async (modelName: string) => {
+      if (rawImageData && typeof rawImageData === 'string' && rawImageData.length > 50) {
         const base64Data = rawImageData.includes('base64,')
           ? rawImageData.split('base64,')[1]
           : rawImageData;
@@ -52,8 +55,8 @@ export async function POST(req: Request) {
           ? 'image/png'
           : 'image/jpeg';
 
-        response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+        return await ai.models.generateContent({
+          model: modelName,
           contents: [
             prompt,
             {
@@ -64,18 +67,21 @@ export async function POST(req: Request) {
             },
           ],
         });
-      } catch (imgErr) {
-        console.warn('Image analysis failed, fallback to text-only:', imgErr);
-        response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+      } else {
+        return await ai.models.generateContent({
+          model: modelName,
           contents: prompt,
         });
       }
-    } else {
-      response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-      });
+    };
+
+    try {
+      // メインの最新高精度モデルで実行
+      response = await generateWithModel(primaryModel);
+    } catch (primaryErr: any) {
+      console.warn(`Primary model ${primaryModel} failed, falling back to ${fallbackModel}:`, primaryErr?.message);
+      // 混雑や一時的エラーの場合は軽量フォールバックモデルで自動再試行
+      response = await generateWithModel(fallbackModel);
     }
 
     return NextResponse.json({ caption: response.text });
