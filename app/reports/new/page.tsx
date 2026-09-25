@@ -44,9 +44,17 @@ export default function NewReportPage() {
   const [selectedMaker, setSelectedMaker] = useState('Canon (RFマウント)');
   const [selectedLens, setSelectedLens] = useState('RF28-70mm F2.8 IS STM');
   const [title, setTitle] = useState('');
+  const [photographer, setPhotographer] = useState('深見 さら'); // 撮影者
   const [camera, setCamera] = useState('Canon EOS RP');
   const [genre, setGenre] = useState('鉄道・航空');
   const [tone, setTone] = useState('爽やか・透明感');
+  
+  // 表示項目のチェックボックス状態
+  const [showTitle, setShowTitle] = useState(true);
+  const [showCamera, setShowCamera] = useState(true);
+  const [showLens, setShowLens] = useState(true);
+  const [showPhotographer, setShowPhotographer] = useState(true);
+
   const [image, setImage] = useState('');
   const [imagePreview, setImagePreview] = useState('');
   const [caption, setCaption] = useState('');
@@ -106,10 +114,15 @@ export default function NewReportPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title,
+          photographer,
           camera,
           lens: selectedLens,
           genre,
           tone,
+          showTitle,
+          showCamera,
+          showLens,
+          showPhotographer,
           image,
         }),
       });
@@ -130,14 +143,14 @@ export default function NewReportPage() {
       <div className="max-w-3xl mx-auto space-y-6">
         <header className="border-b border-slate-800 pb-4">
           <h1 className="text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-500">
-            SNAP REPORT — キャプションジェネレーター
+            SNAP REPORT
           </h1>
-          <p className="text-sm text-slate-400 mt-1">写真と撮影条件から、SNSで映える魅力的な文章を自動生成します。</p>
+          <p className="text-sm text-slate-400 mt-1">レポート設定とキャプション自動生成</p>
         </header>
 
-        {/* 1. 写真 & 設定エリア */}
+        {/* レポート設定エリア */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-          <h2 className="text-lg font-bold text-cyan-400">1. 写真 &amp; 撮影条件の設定</h2>
+          <h2 className="text-lg font-bold text-cyan-400">レポート設定</h2>
 
           <div>
             <label className="block text-sm font-medium mb-1 text-slate-300">写真アップロード</label>
@@ -150,38 +163,91 @@ export default function NewReportPage() {
           </div>
 
           {imagePreview && (
-            <div className="mt-2 relative w-full h-48 rounded-xl overflow-hidden border border-slate-800 bg-slate-950 flex items-center justify-center">
+            <div className="mt-2 relative w-full h-64 rounded-xl overflow-hidden border border-slate-800 bg-slate-950 flex items-center justify-center">
               <img src={imagePreview} alt="Preview" className="h-full object-contain" />
             </div>
           )}
 
+          {/* 画像に含める項目のチェックボックス */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-slate-950 p-3 rounded-xl border border-slate-800 text-sm">
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input type="checkbox" checked={showTitle} onChange={(e) => setShowTitle(e.target.checked)} className="rounded bg-slate-900 border-slate-700 text-cyan-500" />
+              <span>写真名</span>
+            </label>
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input type="checkbox" checked={showPhotographer} onChange={(e) => setShowPhotographer(e.target.checked)} className="rounded bg-slate-900 border-slate-700 text-cyan-500" />
+              <span>撮影者</span>
+            </label>
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input type="checkbox" checked={showCamera} onChange={(e) => setShowCamera(e.target.checked)} className="rounded bg-slate-900 border-slate-700 text-cyan-500" />
+              <span>カメラ名</span>
+            </label>
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input type="checkbox" checked={showLens} onChange={(e) => setShowLens(e.target.checked)} className="rounded bg-slate-900 border-slate-700 text-cyan-500" />
+              <span>レンズ名</span>
+            </label>
+          </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-300">写真タイトル / 主題</label>
+            <label className="block text-sm font-medium mb-1 text-slate-300">写真タイトル</label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="例: ブルーインパルスと青空の軌跡"
+              placeholder="例: ブルーインパルスと快晴の空"
+              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1 text-slate-300">撮影者名</label>
+            <input
+              type="text"
+              value={photographer}
+              onChange={(e) => setPhotographer(e.target.value)}
               className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1 text-slate-300">撮影カメラ</label>
-              <select
+              <label className="block text-sm font-medium mb-1 text-slate-300">カメラ</label>
+              <input
+                type="text"
                 value={camera}
                 onChange={(e) => setCamera(e.target.value)}
                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
-              >
-                <option>Canon EOS RP</option>
-                <option>Canon EOS 6D</option>
-                <option>Google Pixel 9a</option>
-                <option>α-303si</option>
-                <option>Yashica Electro 35</option>
-              </select>
+              />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium mb-1 text-slate-300">レンズメーカー</label>
+              <select
+                value={selectedMaker}
+                onChange={(e) => handleMakerChange(e.target.value)}
+                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
+              >
+                {Object.keys(LENS_DATA).map((maker) => (
+                  <option key={maker} value={maker}>{maker}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1 text-slate-300">レンズ</label>
+            <select
+              value={selectedLens}
+              onChange={(e) => setSelectedLens(e.target.value)}
+              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
+            >
+              {LENS_DATA[selectedMaker]?.map((lens) => (
+                <option key={lens} value={lens}>{lens}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1 text-slate-300">ジャンル</label>
               <select
@@ -196,48 +262,20 @@ export default function NewReportPage() {
                 <option>植物・ガジェット</option>
               </select>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1 text-slate-300">レンズメーカー</label>
-              <select
-                value={selectedMaker}
-                onChange={(e) => handleMakerChange(e.target.value)}
-                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
-              >
-                {Object.keys(LENS_DATA).map((maker) => (
-                  <option key={maker} value={maker}>{maker}</option>
-                ))}
-              </select>
-            </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1 text-slate-300">使用レンズ（詳細）</label>
+              <label className="block text-sm font-medium mb-1 text-slate-300">トーン / 雰囲気</label>
               <select
-                value={selectedLens}
-                onChange={(e) => setSelectedLens(e.target.value)}
+                value={tone}
+                onChange={(e) => setTone(e.target.value)}
                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
               >
-                {LENS_DATA[selectedMaker]?.map((lens) => (
-                  <option key={lens} value={lens}>{lens}</option>
-                ))}
+                <option>爽やか・透明感</option>
+                <option>かっこいい・重厚感</option>
+                <option>エモく・ノスタルジック</option>
+                <option>鮮やか・ポップ</option>
               </select>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1 text-slate-300">トーン / 雰囲気</label>
-            <select
-              value={tone}
-              onChange={(e) => setTone(e.target.value)}
-              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
-            >
-              <option>爽やか・透明感</option>
-              <option>かっこいい・重厚感</option>
-              <option>エモく・ノスタルジック</option>
-              <option>鮮やか・ポップ</option>
-            </select>
           </div>
 
           <button
@@ -249,16 +287,16 @@ export default function NewReportPage() {
           </button>
         </div>
 
-        {/* 2. 出力結果エリア */}
+        {/* 出力結果エリア */}
         {caption && (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3">
-            <h2 className="text-lg font-bold text-cyan-400">2. 生成されたキャプション</h2>
+            <h2 className="text-lg font-bold text-cyan-400">生成されたキャプション</h2>
             <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl whitespace-pre-wrap text-slate-200 leading-relaxed font-sans">
               {caption}
             </div>
             <button
               onClick={() => navigator.clipboard.writeText(caption)}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-lg transition"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-lg transition cursor-pointer"
             >
               📋 クリップボードにコピー
             </button>
