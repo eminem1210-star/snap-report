@@ -50,9 +50,9 @@ export async function POST(req: Request) {
       ];
     }
 
-    // ご希望の gemini-3.5-flash モデルを使用
+    // 安定して動作する gemini-2.5-flash を使用
     const response = await ai.models.generateContent({
-      model: 'gemini-3.5-flash',
+      model: 'gemini-2.5-flash',
       contents: contents,
     });
 
