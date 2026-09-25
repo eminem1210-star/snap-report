@@ -50,9 +50,9 @@ export async function POST(req: Request) {
       ];
     }
 
-    // 安定して動作するモデル設定
+    // Googleが推奨する最新の gemini-3.8-flash を使用
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.8-flash',
       contents: contents,
     });
 
