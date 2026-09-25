@@ -40,13 +40,6 @@ export async function POST(req: Request) {
 - 適切なハッシュタグ(5〜8個程度)
 `;
 
-    // キャプション生成用に思考コストを下げて高速化する設定
-    const config = {
-      thinkingConfig: {
-        thinkingLevel: "low" as const,
-      },
-    };
-
     let response;
 
     if (rawImageData && typeof rawImageData === 'string' && rawImageData.length > 50) {
@@ -70,21 +63,18 @@ export async function POST(req: Request) {
               },
             },
           ],
-          config,
         });
       } catch (imgErr) {
         console.warn('Image analysis failed, fallback to text-only:', imgErr);
         response = await ai.models.generateContent({
           model: 'gemini-3.8-flash',
           contents: prompt,
-          config,
         });
       }
     } else {
       response = await ai.models.generateContent({
         model: 'gemini-3.8-flash',
         contents: prompt,
-        config,
       });
     }
 
