@@ -54,7 +54,6 @@ ${displayInfoText || '- 撮影スナップ'}
       ];
     }
 
-    // 混雑時（503エラーなど）に自動で最大3回まで再試行する処理
     let response: any = null;
     let retries = 3;
     let lastError: any = null;
@@ -65,19 +64,31 @@ ${displayInfoText || '- 撮影スナップ'}
           model: 'gemini-3.8-flash',
           contents: contents,
         });
-        break; // 成功したらループを抜ける
+        break;
       } catch (err: any) {
         lastError = err;
-        // 503や429などの混雑・制限エラーの場合のみ少し待ってリトライ
         if (err?.status === 503 || err?.status === 429 || err?.message?.includes('high demand') || err?.message?.includes('Quota exceeded')) {
-          await new Promise((resolve) => setTimeout(resolve, 2000 * (i + 1))); // 2秒、4秒と待機時間を増やす
+          await new Promise((resolve) => setTimeout(resolve, 3000 * (i + 1)));
           continue;
         }
-        break; // その他のエラーは即座に中断
+        break;
       }
     }
 
     if (!response) {
+      const errMessage = lastError?.message || '';
+      if (errMessage.includes('Quota exceeded') || errMessage.includes('429')) {
+        return NextResponse.json(
+          { error: 'APIの利用回数制限（無料枠の上限）に達しました。1分〜数分ほど時間を置いてから再度お試しください。' },
+          { status: 429 }
+        );
+      }
+      if (errMessage.includes('high demand') || errMessage.includes('503')) {
+        return NextResponse.json(
+          { error: '現在AIサーバーが非常に混雑しています（503エラー）。少し時間を置いてから再度お試しください。' },
+          { status: 503 }
+        );
+      }
       throw lastError || new Error('AIモデルへの接続に失敗しました。');
     }
 
@@ -85,7 +96,7 @@ ${displayInfoText || '- 撮影スナップ'}
   } catch (error: any) {
     console.error('API Error Detail:', error);
     return NextResponse.json(
-      { error: error?.message || 'キャプション生成中にエラーが発生しました。少し時間を置いて再度お試しください。' },
+      { error: error?.message || 'キャプション生成中にエラーが発生しました。' },
       { status: 500 }
     );
   }
