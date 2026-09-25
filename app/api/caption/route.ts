@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
 const apiKey = process.env.GEMINI_API_KEY;
 
@@ -23,9 +23,8 @@ export async function POST(req: Request) {
       body.file ||
       body.base64;
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    // 確実に動作するモデル名に固定
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    // 最新 SDK の初期化
+    const ai = new GoogleGenAI({ apiKey });
 
     const prompt = `
 以下の写真および撮影条件に基づいて、SNS投稿用の魅力的でセンスの良いキャプションを作成してください。
@@ -42,7 +41,7 @@ export async function POST(req: Request) {
 - 適切なハッシュタグ（5〜8個程度）
 `;
 
-    let result;
+    let response;
 
     if (rawImageData && typeof rawImageData === 'string' && rawImageData.length > 50) {
       try {
@@ -54,26 +53,33 @@ export async function POST(req: Request) {
           ? 'image/png'
           : 'image/jpeg';
 
-        result = await model.generateContent([
-          prompt,
-          {
-            inlineData: {
-              data: base64Data,
-              mimeType: mimeType,
+        response = await ai.models.generateContent({
+          model: 'gemini-2.0-flash',
+          contents: [
+            prompt,
+            {
+              inlineData: {
+                data: base64Data,
+                mimeType: mimeType,
+              },
             },
-          },
-        ]);
+          ],
+        });
       } catch (imgErr) {
-        // 画像解析でエラーが出てもフォールバックしてテキストのみで生成
         console.warn('Image analysis failed, fallback to text-only:', imgErr);
-        result = await model.generateContent(prompt);
+        response = await ai.models.generateContent({
+          model: 'gemini-2.0-flash',
+          contents: prompt,
+        });
       }
     } else {
-      result = await model.generateContent(prompt);
+      response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: prompt,
+      });
     }
 
-    const responseText = result.response.text();
-    return NextResponse.json({ caption: responseText });
+    return NextResponse.json({ caption: response.text });
   } catch (error: any) {
     console.error('Gemini API Error Detail:', error);
     return NextResponse.json(
