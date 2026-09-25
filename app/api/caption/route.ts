@@ -1,70 +1,76 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+// 環境変数から API キーを取得
+const apiKey = process.env.GEMINI_API_KEY;
+
 export async function POST(req: Request) {
   try {
-    const { camera, lens, genre, tone, photoName, imageBase64 } = await req.json();
-
-    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'Vercelの環境変数 GEMINI_API_KEY が読み込めていません。' },
+        { error: 'GEMINI_API_KEY が設定されていません。' },
         { status: 500 }
       );
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const { image, title, camera, lens, genre, tone } = await req.json();
 
-    const prompt = `
-あなたはプロの写真家兼SNSプロデューサーです。
-提供された画像と以下の撮影データをもとに、InstagramやX(Twitter)で目を引く最高におしゃれな写真キャプションを生成してください。
-
-【撮影・写真データ】
-- 写真タイトル: ${photoName || '未指定'}
-- カメラ: ${camera || '未指定'}
-- レンズ: ${lens || '未指定'}
-- ジャンル: ${genre || '未指定'}
-- トーン/雰囲気: ${tone || '未指定'}
-
-【指示】
-1. 画像に写っている被写体、構図、色合い、光の入り方を深く観察して文章に反映してください。
-2. 雰囲気が「${tone}」にぴったり合うような言葉遣いや絵文字を選んでください。
-3. 出力フォーマットは以下の構成にしてください：
-
-【タイトル・キャッチコピー】（絵文字を含めた印象的な短文）
-【本文】（画像に写っているものの表現と感情を込めた2〜3行の描写）
-
-------------------
-Photo: ${photoName || 'タイトルなし'}
-Cam: ${camera}
-Lens: ${lens}
-
-#${genre} #${tone ? tone.replace(/・/g, '') : ''} #ファインダー越しの私の世界 #写真好きな人と繋がりたい
-`;
-
-    const contents: any[] = [prompt];
-
-    if (imageBase64 && imageBase64.includes('base64,')) {
-      const base64Data = imageBase64.split('base64,')[1];
-      const mimeType = imageBase64.split(';')[0].split(':')[1] || 'image/jpeg';
-
-      contents.push({
-        inlineData: {
-          data: base64Data,
-          mimeType: mimeType,
-        },
-      });
+    if (!image) {
+      return NextResponse.json(
+        { error: '画像データが含まれていません。' },
+        { status: 400 }
+      );
     }
 
-    const result = await model.generateContent(contents);
+    // GoogleGenerativeAI の初期化
+    const genAI = new GoogleGenerativeAI(apiKey);
+    
+    // 安定稼働モデルの指定
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    // Base64画像の整形処理
+    const base64Data = image.includes('base64,')
+      ? image.split('base64,')[1]
+      : image;
+
+    const mimeType = image.includes('data:image/png')
+      ? 'image/png'
+      : 'image/jpeg';
+
+    const imagePart = {
+      inlineData: {
+        data: base64Data,
+        mimeType: mimeType,
+      },
+    };
+
+    // プロンプトの構築
+    const prompt = `
+以下の写真および撮影条件に基づいて、SNS（InstagramやXなど）投稿用の魅力的で魅力的なキャプションを作成してください。
+
+【写真情報】
+- タイトル/主題: ${title || 'なし'}
+- 撮影カメラ: ${camera || '未指定'}
+- 使用レンズ: ${lens || '未指定'}
+- ジャンル: ${genre || 'スナップ'}
+- 雰囲気/トーン: ${tone || 'おまかせ'}
+
+【出力フォーマット】
+- 写真を引き立てるキャプション本文（2〜3文程度）
+- 適切なハッシュタグ（5〜8個程度）
+
+自然でセンスのある日本語で出力してください。
+`;
+
+    // API呼び出し
+    const result = await model.generateContent([prompt, imagePart]);
     const responseText = result.response.text();
 
     return NextResponse.json({ caption: responseText });
   } catch (error: any) {
-    console.error('Gemini API Details Error:', error);
+    console.error('Gemini API Error Detail:', error);
     return NextResponse.json(
-      { error: `API呼び出し失敗: ${error?.message || JSON.stringify(error)}` },
+      { error: error?.message || 'キャプション生成中にエラーが発生しました。' },
       { status: 500 }
     );
   }
