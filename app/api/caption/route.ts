@@ -50,7 +50,7 @@ export async function POST(req: Request) {
       ];
     }
 
-    // 安定して動作する gemini-2.5-flash を使用
+    // 安定して動作するモデル設定
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: contents,
