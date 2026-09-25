@@ -54,49 +54,26 @@ ${displayInfoText || '- 撮影スナップ'}
       ];
     }
 
-    let response: any = null;
-    let retries = 3;
-    let lastError: any = null;
-
-    for (let i = 0; i < retries; i++) {
-      try {
-        response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: contents,
-        });
-        break;
-      } catch (err: any) {
-        lastError = err;
-        if (err?.status === 503 || err?.status === 429 || err?.message?.includes('high demand') || err?.message?.includes('Quota exceeded')) {
-          await new Promise((resolve) => setTimeout(resolve, 3000 * (i + 1)));
-          continue;
-        }
-        break;
-      }
-    }
-
-    if (!response) {
-      const errMessage = lastError?.message || '';
-      if (errMessage.includes('Quota exceeded') || errMessage.includes('429')) {
-        return NextResponse.json(
-          { error: 'APIの利用回数制限（無料枠の上限）に達しました。1分〜数分ほど時間を置いてから再度お試しください。' },
-          { status: 429 }
-        );
-      }
-      if (errMessage.includes('high demand') || errMessage.includes('503')) {
-        return NextResponse.json(
-          { error: '現在AIサーバーが非常に混雑しています（503エラー）。少し時間を置いてから再度お試しください。' },
-          { status: 503 }
-        );
-      }
-      throw lastError || new Error('AIモデルへの接続に失敗しました。');
-    }
+    // 正式な最新モデル `gemini-3.5-flash` を指定
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: contents,
+    });
 
     return NextResponse.json({ caption: response.text });
   } catch (error: any) {
     console.error('API Error Detail:', error);
+    const errMessage = error?.message || '';
+    
+    if (errMessage.includes('Quota exceeded') || errMessage.includes('429')) {
+      return NextResponse.json(
+        { error: 'APIの利用回数制限に達しました。少し時間を置いてから再度お試しください。' },
+        { status: 429 }
+      );
+    }
+    
     return NextResponse.json(
-      { error: error?.message || 'キャプション生成中にエラーが発生しました。' },
+      { error: errMessage || 'キャプション生成中にエラーが発生しました。' },
       { status: 500 }
     );
   }
