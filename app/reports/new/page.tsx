@@ -1,87 +1,50 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-// メーカーごとの豊富なレンズデータ（リクエストいただいたRF100-400等も追加）
-const LENS_DATA: { [key: string]: string[] } = {
+const INITIAL_LENS_DATA: { [key: string]: string[] } = {
   'Canon (RFマウント)': [
     'RF28-70mm F2.8 IS STM',
     'RF100-400mm F5.6-8 IS USM',
     'RF24-105mm F4 L IS USM',
     'RF70-200mm F2.8 L IS USM',
     'RF100-500mm F4.5-7.1 L IS USM',
-    'RF200-800mm F6.3-9 IS USM',
-    'RF50mm F1.8 STM',
-    'RF35mm F1.8 Macro IS STM',
   ],
   'Canon (EFマウント)': [
     'EF24-70mm F2.8L II USM',
     'EF70-200mm F2.8L IS III USM',
     'EF100-400mm F4.5-5.6L IS II USM',
-    'EF400mm F5.6L USM',
-    'EF50mm F1.8 STM',
   ],
   'Sony (Eマウント)': [
     'FE 24-70mm F2.8 GM II',
     'FE 70-200mm F2.8 GM OSS II',
     'FE 200-600mm F5.6-6.3 G OSS',
-    'FE 70-300mm F4.5-5.6 G OSS',
-    'FE 50mm F1.4 GM',
-    'E 18-135mm F3.5-5.6 OSS',
   ],
   'Nikon (Zマウント)': [
     'NIKKOR Z 24-70mm f/2.8 S',
-    'NIKKOR Z 70-200mm f/2.8 VR S',
     'NIKKOR Z 180-600mm f/5.6-6.3 VR',
-    'NIKKOR Z 100-400mm f/4.5-5.6 VR S',
-    'NIKKOR Z 40mm f/2',
   ],
-  'Fujifilm (Xマウント)': [
-    'XF16-55mmF2.8 R LM WR',
-    'XF50-140mmF2.8 R LM OIS WR',
-    'XF150-600mmF5.6-8 R LM OIS WR',
-    'XF35mmF1.4 R',
-    'XF27mmF2.8 R WR',
-  ],
-  'Tamron / Sigma / その他': [
-    'タムロン 150-500mm F/5-6.7 Di III VC VXD',
-    'タムロン 50-400mm F/4.5-6.3 Di III VC VXD',
-    'シグマ 60-600mm F4.5-6.3 DG DN OS | Sports',
-    'シグマ 150-600mm F5-6.3 DG OS HSM',
-  ],
-  'オールドレンズ・コンパクト': [
+  'オールドレンズ・その他': [
     'Super-Takumar 55mm F1.8',
-    'Super-Takumar 135mm F2.5',
-    'Yashica Electro 35 (CC/GSN)',
+    'Yashica Electro 35',
     'Konica C35 EF',
     'RICOH GRレンズ (内蔵)',
   ]
 };
 
-// 豊富なカメラ選択肢（RICOH GRや各種モデルを追加）
-const CAMERA_OPTIONS = [
+const INITIAL_CAMERAS = [
   'Canon EOS RP',
   'Canon EOS 6D',
-  'Canon EOS R3',
-  'Canon EOS R5 / R5 Mark II',
-  'Canon EOS R6 Mark II',
-  'Canon EOS R7',
   'Canon EOS R8',
   'Sony α7 IV',
-  'Sony α7R V',
-  'Sony α1',
-  'Nikon Z8',
-  'Nikon Z6III',
-  'Fujifilm X-T5',
-  'Fujifilm X-H2',
   'RICOH GR III',
   'RICOH GR IIIx',
-  'Minolta α-303si (フィルム)',
-  'Yashica Electro 35 (フィルム)',
-  'Konica C35 EF (フィルム)',
-  'その他カメラ'
+  'Minolta α-303si',
 ];
 
 export default function NewReportPage() {
+  const [lensData, setLensData] = useState(INITIAL_LENS_DATA);
+  const [cameras, setCameras] = useState(INITIAL_CAMERAS);
+
   const [selectedMaker, setSelectedMaker] = useState('Canon (RFマウント)');
   const [selectedLens, setSelectedLens] = useState('RF28-70mm F2.8 IS STM');
   const [title, setTitle] = useState('');
@@ -100,9 +63,49 @@ export default function NewReportPage() {
   const [caption, setCaption] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // 起動時にローカルストレージから保存されたカスタム機材を読み込む
+  useEffect(() => {
+    const savedLenses = localStorage.getItem('snap_report_custom_lenses');
+    if (savedLenses) {
+      try {
+        setLensData(JSON.parse(savedLenses));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    const savedCameras = localStorage.getItem('snap_report_custom_cameras');
+    if (savedCameras) {
+      try {
+        setCameras(JSON.parse(savedCameras));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
+
   const handleMakerChange = (maker: string) => {
     setSelectedMaker(maker);
-    setSelectedLens(LENS_DATA[maker]?.[0] || '');
+    setSelectedLens(lensData[maker]?.[0] || '');
+  };
+
+  // 手入力されたレンズやカメラを保存する処理
+  const handleSaveCustomGear = () => {
+    // カメラの保存
+    if (camera && !cameras.includes(camera)) {
+      const updatedCameras = [camera, ...cameras];
+      setCameras(updatedCameras);
+      localStorage.setItem('snap_report_custom_cameras', JSON.stringify(updatedCameras));
+    }
+
+    // レンズの保存
+    if (selectedLens && (!lensData[selectedMaker] || !lensData[selectedMaker].includes(selectedLens))) {
+      const updatedMakerLenses = [selectedLens, ...(lensData[selectedMaker] || [])];
+      const updatedLensData = { ...lensData, [selectedMaker]: updatedMakerLenses };
+      setLensData(updatedLensData);
+      localStorage.setItem('snap_report_custom_lenses', JSON.stringify(updatedLensData));
+    }
+
+    alert('✨ 入力した機材を次から選べるように保存しました！');
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,7 +188,7 @@ export default function NewReportPage() {
           <h1 className="text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-indigo-500">
             SNAP REPORT
           </h1>
-          <p className="text-sm text-slate-400 mt-1">レポート設定とキャプション自動生成（拡張版）</p>
+          <p className="text-sm text-slate-400 mt-1">レポート設定とキャプション自動生成</p>
         </header>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
@@ -249,13 +252,13 @@ export default function NewReportPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1 text-slate-300">カメラ（選択または直接入力）</label>
+              <label className="block text-sm font-medium mb-1 text-slate-300">カメラ</label>
               <select
                 value={camera}
                 onChange={(e) => setCamera(e.target.value)}
                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100 mb-2"
               >
-                {CAMERA_OPTIONS.map((cam) => (
+                {cameras.map((cam) => (
                   <option key={cam} value={cam}>{cam}</option>
                 ))}
               </select>
@@ -263,19 +266,19 @@ export default function NewReportPage() {
                 type="text"
                 value={camera}
                 onChange={(e) => setCamera(e.target.value)}
-                placeholder="直接入力も可能"
+                placeholder="直接手入力も可能"
                 className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:outline-none focus:border-cyan-500 text-slate-300"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1 text-slate-300">レンズメーカー / 系統</label>
+              <label className="block text-sm font-medium mb-1 text-slate-300">レンズメーカー</label>
               <select
                 value={selectedMaker}
                 onChange={(e) => handleMakerChange(e.target.value)}
                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
               >
-                {Object.keys(LENS_DATA).map((maker) => (
+                {Object.keys(lensData).map((maker) => (
                   <option key={maker} value={maker}>{maker}</option>
                 ))}
               </select>
@@ -283,13 +286,13 @@ export default function NewReportPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-300">レンズ（詳細）</label>
+            <label className="block text-sm font-medium mb-1 text-slate-300">レンズ</label>
             <select
               value={selectedLens}
               onChange={(e) => setSelectedLens(e.target.value)}
               className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100 mb-2"
             >
-              {LENS_DATA[selectedMaker]?.map((lens) => (
+              {lensData[selectedMaker]?.map((lens) => (
                 <option key={lens} value={lens}>{lens}</option>
               ))}
             </select>
@@ -297,9 +300,16 @@ export default function NewReportPage() {
               type="text"
               value={selectedLens}
               onChange={(e) => setSelectedLens(e.target.value)}
-              placeholder="リストにない場合はここに直接入力できます"
-              className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:outline-none focus:border-cyan-500 text-slate-300"
+              placeholder="直接手入力も可能"
+              className="w-full p-2 bg-slate-950 border border-slate-800 rounded-xl text-sm focus:outline-none focus:border-cyan-500 text-slate-300 mb-2"
             />
+            <button
+              onClick={handleSaveCustomGear}
+              type="button"
+              className="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-400 font-semibold rounded-lg transition cursor-pointer"
+            >
+              💾 この手入力した機材を次回から選べるように保存する
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

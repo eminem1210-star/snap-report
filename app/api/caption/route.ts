@@ -3,32 +3,6 @@ import { GoogleGenAI } from '@google/genai';
 
 const apiKey = process.env.GEMINI_API_KEY;
 
-// 混雑時（503等）に自動で数回リトライするヘルパー関数
-async function generateWithRetry(ai: GoogleGenAI, params: any, retries = 3, delay = 1500): Promise<any> {
-  for (let i = 0; i < retries; i++) {
-    try {
-      const response = await ai.models.generateContent(params);
-      if (response) {
-        return response;
-      }
-    } catch (error: any) {
-      const isOverloaded = 
-        error?.status === 503 || 
-        error?.code === 503 || 
-        error?.message?.includes('high demand') ||
-        error?.message?.includes('UNAVAILABLE');
-
-      if (isOverloaded && i < retries - 1) {
-        // 少し待ってから再試行（1.5秒、3秒...と待機時間を増やす）
-        await new Promise((resolve) => setTimeout(resolve, delay * (i + 1)));
-        continue;
-      }
-      throw error;
-    }
-  }
-  throw new Error('モデルからの応答を取得できませんでした。');
-}
-
 export async function POST(req: Request) {
   try {
     if (!apiKey) {
@@ -43,7 +17,6 @@ export async function POST(req: Request) {
 
     const ai = new GoogleGenAI({ apiKey });
 
-    // 表示項目の指定をプロンプトに反映
     let displayInfoText = '';
     if (showTitle && title) displayInfoText += `- タイトル/主題: ${title}\n`;
     if (showPhotographer && photographer) displayInfoText += `- 撮影者: ${photographer}\n`;
@@ -81,9 +54,8 @@ ${displayInfoText || '- 撮影スナップ'}
       ];
     }
 
-    // リトライ機能付きでモデルを呼び出し
-    const response = await generateWithRetry(ai, {
-      model: 'gemini-3.8-flash',
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
       contents: contents,
     });
 
@@ -91,7 +63,7 @@ ${displayInfoText || '- 撮影スナップ'}
   } catch (error: any) {
     console.error('API Error Detail:', error);
     return NextResponse.json(
-      { error: error?.message || 'キャプション生成中にエラーが発生しました。しばらく待ってから再度お試しください。' },
+      { error: error?.message || 'キャプション生成中にエラーが発生しました。' },
       { status: 500 }
     );
   }
