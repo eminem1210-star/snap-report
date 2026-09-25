@@ -3,6 +3,13 @@ import { GoogleGenAI } from '@google/genai';
 
 const apiKey = process.env.GEMINI_API_KEY;
 
+// 試行するモデルの候補リスト（新しい順）
+const CANDIDATE_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+];
+
 export async function POST(req: Request) {
   try {
     if (!apiKey) {
@@ -13,7 +20,6 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-
     const { title, camera, lens, genre, tone } = body;
     let rawImageData =
       body.image ||
@@ -40,46 +46,60 @@ export async function POST(req: Request) {
 - 適切なハッシュタグ（5〜8個程度）
 `;
 
-    let response;
+    let responseText = '';
+    let lastError = null;
 
-    // API要求に従い gemini-2.5-flash を指定
-    if (rawImageData && typeof rawImageData === 'string' && rawImageData.length > 50) {
+    // 利用可能なモデルを順番に試す
+    for (const modelName of CANDIDATE_MODELS) {
       try {
-        const base64Data = rawImageData.includes('base64,')
-          ? rawImageData.split('base64,')[1]
-          : rawImageData;
+        console.log(`Trying model: ${modelName}`);
 
-        const mimeType = rawImageData.includes('data:image/png')
-          ? 'image/png'
-          : 'image/jpeg';
+        if (rawImageData && typeof rawImageData === 'string' && rawImageData.length > 50) {
+          const base64Data = rawImageData.includes('base64,')
+            ? rawImageData.split('base64,')[1]
+            : rawImageData;
 
-        response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            prompt,
-            {
-              inlineData: {
-                data: base64Data,
-                mimeType: mimeType,
+          const mimeType = rawImageData.includes('data:image/png')
+            ? 'image/png'
+            : 'image/jpeg';
+
+          const res = await ai.models.generateContent({
+            model: modelName,
+            contents: [
+              prompt,
+              {
+                inlineData: {
+                  data: base64Data,
+                  mimeType: mimeType,
+                },
               },
-            },
-          ],
-        });
-      } catch (imgErr) {
-        console.warn('Image analysis failed, fallback to text-only:', imgErr);
-        response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: prompt,
-        });
+            ],
+          });
+          responseText = res.text || '';
+        } else {
+          const res = await ai.models.generateContent({
+            model: modelName,
+            contents: prompt,
+          });
+          responseText = res.text || '';
+        }
+
+        // 成功したらループを抜ける
+        if (responseText) {
+          break;
+        }
+      } catch (err: any) {
+        console.warn(`Model ${modelName} failed:`, err?.message || err);
+        lastError = err;
+        // 404 等のエラーの場合は次の候補モデルを試す
       }
-    } else {
-      response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-      });
     }
 
-    return NextResponse.json({ caption: response.text });
+    if (!responseText) {
+      throw lastError || new Error('すべての Gemini モデルの呼び出しに失敗しました。');
+    }
+
+    return NextResponse.json({ caption: responseText });
   } catch (error: any) {
     console.error('Gemini API Error Detail:', error);
     return NextResponse.json(
