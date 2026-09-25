@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
     let response;
 
-    // API側から推奨されている最新モデル「gemini-2.5-flash」を使用
+    // API要求に従い gemini-2.5-flash を指定
     if (rawImageData && typeof rawImageData === 'string' && rawImageData.length > 50) {
       try {
         const base64Data = rawImageData.includes('base64,')
