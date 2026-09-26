@@ -48,11 +48,11 @@ export default function NewReportPage() {
   const [selectedMaker, setSelectedMaker] = useState('Canon (RFマウント)');
   const [selectedLens, setSelectedLens] = useState('RF28-70mm F2.8 IS STM');
   const [title, setTitle] = useState('');
-  const [photographer, setPhotographer] = useState('オーレリアン二郎'); // 💡 撮影者デフォルト：オーレリアン二郎
+  const [photographer, setPhotographer] = useState('オーレリアン二郎');
   const [camera, setCamera] = useState('Canon EOS RP');
   const [genre, setGenre] = useState('鉄道・航空');
   const [tone, setTone] = useState('爽やか・透明感');
-  const [userComment, setUserComment] = useState(''); // 💡 撮影者のこだわり・思いを入力する欄
+  const [userComment, setUserComment] = useState('');
   
   const [showTitle, setShowTitle] = useState(true);
   const [showCamera, setShowCamera] = useState(true);
@@ -210,18 +210,31 @@ export default function NewReportPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title, photographer, camera, lens: selectedLens, genre, tone,
-          userComment, // 💡 コメント欄の内容をAPIに送信
+          userComment,
           showTitle, showCamera, showLens, showPhotographer, image,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'サーバーエラーが発生しました');
-      setCaption(data.caption || '生成に失敗しました。');
+      setCaption(data.caption || '');
     } catch (err: any) {
       alert(`キャプション生成のリクエストに失敗しました: ${err.message}`);
     } finally {
       setLoading(false);
     }
+  };
+
+  // テキストをパースしてX用とInstagram用に分離する関数
+  const getXCaption = () => {
+    if (!caption) return '';
+    const parts = caption.split('【Instagram用キャプション】');
+    return parts[0].replace('【X用キャプション】', '').trim();
+  };
+
+  const getInstaCaption = () => {
+    if (!caption) return '';
+    const parts = caption.split('【Instagram用キャプション】');
+    return parts[1] ? parts[1].trim() : '';
   };
 
   return (
@@ -321,7 +334,6 @@ export default function NewReportPage() {
             />
           </div>
 
-          {/* 💡 撮影者のこだわり・思いを入力する欄（コメント欄） */}
           <div>
             <label className="block text-sm font-medium mb-1 text-slate-300">
               💬 撮影者のこだわり・思い・現場のメモ（任意）
@@ -329,7 +341,7 @@ export default function NewReportPage() {
             <textarea
               value={userComment}
               onChange={(e) => setUserComment(e.target.value)}
-              placeholder="例: 雲ひとつない青空を狙うために早朝からスタンバイしました。シャッタースピードを上げて機体の鋭さを強調しています。"
+              placeholder="例: 雲ひとつない青空を狙うために早朝からスタンバイしました。"
               rows={3}
               className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100 text-sm leading-relaxed"
             />
@@ -438,17 +450,34 @@ export default function NewReportPage() {
         </div>
 
         {caption && (
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3">
-            <h2 className="text-lg font-bold text-cyan-400">生成されたキャプション</h2>
-            <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl whitespace-pre-wrap text-slate-200 leading-relaxed font-sans">
-              {caption}
+          <div className="space-y-6">
+            {/* X用セクション */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3">
+              <h2 className="text-lg font-bold text-cyan-400">X（旧Twitter）用</h2>
+              <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl whitespace-pre-wrap text-slate-200 leading-relaxed font-sans">
+                {getXCaption()}
+              </div>
+              <button
+                onClick={() => navigator.clipboard.writeText(getXCaption())}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-lg transition cursor-pointer"
+              >
+                📋 X用をコピー
+              </button>
             </div>
-            <button
-              onClick={() => navigator.clipboard.writeText(caption)}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-lg transition cursor-pointer"
-            >
-              📋 クリップボードにコピー
-            </button>
+
+            {/* Instagram用セクション */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-3">
+              <h2 className="text-lg font-bold text-cyan-400">Instagram用</h2>
+              <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl whitespace-pre-wrap text-slate-200 leading-relaxed font-sans">
+                {getInstaCaption()}
+              </div>
+              <button
+                onClick={() => navigator.clipboard.writeText(getInstaCaption())}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-lg transition cursor-pointer"
+              >
+                📋 Instagram用をコピー
+              </button>
+            </div>
           </div>
         )}
       </div>
