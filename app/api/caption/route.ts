@@ -13,7 +13,20 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { title, photographer, camera, lens, genre, tone, showTitle, showCamera, showLens, showPhotographer, image } = body;
+    const { 
+      title, 
+      photographer, 
+      camera, 
+      lens, 
+      genre, 
+      tone, 
+      userComment, // 💡 撮影者の思いやこだわりを受け取る
+      showTitle, 
+      showCamera, 
+      showLens, 
+      showPhotographer, 
+      image 
+    } = body;
 
     const ai = new GoogleGenAI({ apiKey });
 
@@ -31,11 +44,15 @@ ${displayInfoText || '- 撮影スナップ'}
 - ジャンル: ${genre || '鉄道・航空'}
 - トーン: ${tone || '爽やか・透明感'}
 
+【撮影者のこだわり・思い・現場のメモ】
+${userComment ? userComment : '特になし（写真の雰囲気や機材特性に合わせてお任せ）'}
+
 【重要指示】
-1. 写真の世界観や撮影機材の魅力が伝わるエモーショナルでセンスの良い文章（2〜3文）を作成してください。
-2. Instagramで絶対に外せない以下の【必須ハッシュタグ】を必ず含めてください：
+1. 写真の世界観や撮影機材の魅力が伝わるエモーショナルでセンスの良い文章を作成してください。
+2. もし上記の【撮影者のこだわり・思い】にコメントがある場合は、その熱量やエピソードを文章内に自然かつ魅力的に組み込んでください。
+3. Instagramで絶対に外せない以下の【必須ハッシュタグ】を必ず含めてください：
    #aviationphotography #飛行機好きな人と繋がりたい #ヒコーキ #ig_airplane_club #hikoki_club
-3. その他、カメラやレンズ、ジャンルに合わせたトレンドのタグを5〜8個ほど追加してください。
+4. その他、カメラやレンズ、ジャンルに合わせたトレンドのタグを5〜8個ほど追加してください。
 `;
 
     let contents: any = prompt;
@@ -62,7 +79,7 @@ ${displayInfoText || '- 撮影スナップ'}
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         response = await ai.models.generateContent({
-          model: 'gemini-3.5-flash',
+          model: 'gemini-2.5-flash',
           contents: contents,
         });
         break; // 成功したらループを抜ける

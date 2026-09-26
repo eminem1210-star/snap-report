@@ -48,10 +48,11 @@ export default function NewReportPage() {
   const [selectedMaker, setSelectedMaker] = useState('Canon (RFマウント)');
   const [selectedLens, setSelectedLens] = useState('RF28-70mm F2.8 IS STM');
   const [title, setTitle] = useState('');
-  const [photographer, setPhotographer] = useState('深見 さら');
+  const [photographer, setPhotographer] = useState('オーレリアン二郎'); // 💡 撮影者デフォルト：オーレリアン二郎
   const [camera, setCamera] = useState('Canon EOS RP');
   const [genre, setGenre] = useState('鉄道・航空');
   const [tone, setTone] = useState('爽やか・透明感');
+  const [userComment, setUserComment] = useState(''); // 💡 撮影者のこだわり・思いを入力する欄
   
   const [showTitle, setShowTitle] = useState(true);
   const [showCamera, setShowCamera] = useState(true);
@@ -63,23 +64,14 @@ export default function NewReportPage() {
   const [caption, setCaption] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // 起動時にローカルストレージから保存されたカスタム機材を読み込む
   useEffect(() => {
     const savedLenses = localStorage.getItem('snap_report_custom_lenses');
     if (savedLenses) {
-      try {
-        setLensData(JSON.parse(savedLenses));
-      } catch (e) {
-        console.error(e);
-      }
+      try { setLensData(JSON.parse(savedLenses)); } catch (e) { console.error(e); }
     }
     const savedCameras = localStorage.getItem('snap_report_custom_cameras');
     if (savedCameras) {
-      try {
-        setCameras(JSON.parse(savedCameras));
-      } catch (e) {
-        console.error(e);
-      }
+      try { setCameras(JSON.parse(savedCameras)); } catch (e) { console.error(e); }
     }
   }, []);
 
@@ -88,16 +80,13 @@ export default function NewReportPage() {
     setSelectedLens(lensData[maker]?.[0] || '');
   };
 
-  // 手入力されたレンズやカメラを保存する処理
   const handleSaveCustomGear = () => {
-    // カメラの保存
     if (camera && !cameras.includes(camera)) {
       const updatedCameras = [camera, ...cameras];
       setCameras(updatedCameras);
       localStorage.setItem('snap_report_custom_cameras', JSON.stringify(updatedCameras));
     }
 
-    // レンズの保存
     if (selectedLens && (!lensData[selectedMaker] || !lensData[selectedMaker].includes(selectedLens))) {
       const updatedMakerLenses = [selectedLens, ...(lensData[selectedMaker] || [])];
       const updatedLensData = { ...lensData, [selectedMaker]: updatedMakerLenses };
@@ -112,28 +101,23 @@ export default function NewReportPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setImagePreview(URL.createObjectURL(file));
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreview(previewUrl);
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1024;
-        const MAX_HEIGHT = 1024;
+        const MAX_WIDTH = 1600;
+        const MAX_HEIGHT = 1600;
         let width = img.width;
         let height = img.height;
 
         if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
+          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
         } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
+          if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
         }
 
         canvas.width = width;
@@ -141,11 +125,80 @@ export default function NewReportPage() {
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
         
-        setImage(canvas.toDataURL('image/jpeg', 0.8));
+        setImage(canvas.toDataURL('image/jpeg', 0.9));
       };
       img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleDownloadBakedImage = () => {
+    const targetSource = image || imagePreview;
+    if (!targetSource) {
+      alert('⚠️ 先に写真をアップロードしてください。');
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = targetSource;
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.drawImage(img, 0, 0);
+
+      if (showTitle || showPhotographer || showCamera || showLens) {
+        const baseScale = Math.max(canvas.width, canvas.height) / 1000;
+        const mainFontSize = Math.round(18 * baseScale);
+        const subFontSize = Math.round(13 * baseScale);
+        const padding = Math.round(35 * baseScale);
+
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+
+        let x = canvas.width - padding;
+        let y = canvas.height - padding;
+
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+        ctx.shadowBlur = 6 * baseScale;
+        ctx.shadowOffsetX = 1 * baseScale;
+        ctx.shadowOffsetY = 2 * baseScale;
+
+        if (showTitle && title) {
+          ctx.font = `bold ${Math.round(mainFontSize * 0.9)}px sans-serif`;
+          ctx.fillStyle = '#67e8f9';
+          ctx.fillText(`📌 ${title}`, x, y);
+          y -= mainFontSize * 1.3;
+        }
+
+        if ((showCamera && camera) || (showLens && selectedLens)) {
+          ctx.font = `300 ${subFontSize}px sans-serif`;
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+          const subText = [showCamera ? camera : '', showLens ? selectedLens : ''].filter(Boolean).join(' · ');
+          ctx.fillText(subText, x, y);
+          y -= subFontSize * 1.4;
+        }
+
+        if (showPhotographer && photographer) {
+          ctx.font = `500 ${mainFontSize}px sans-serif`;
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+          ctx.fillText(`Shot by ${photographer}`, x, y);
+        }
+      }
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      const link = document.createElement('a');
+      link.download = `snap-report-${Date.now()}.jpg`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
   };
 
   const handleGenerate = async () => {
@@ -156,23 +209,13 @@ export default function NewReportPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title,
-          photographer,
-          camera,
-          lens: selectedLens,
-          genre,
-          tone,
-          showTitle,
-          showCamera,
-          showLens,
-          showPhotographer,
-          image,
+          title, photographer, camera, lens: selectedLens, genre, tone,
+          userComment, // 💡 コメント欄の内容をAPIに送信
+          showTitle, showCamera, showLens, showPhotographer, image,
         }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'サーバーエラーが発生しました');
-      }
+      if (!res.ok) throw new Error(data.error || 'サーバーエラーが発生しました');
       setCaption(data.caption || '生成に失敗しました。');
     } catch (err: any) {
       alert(`キャプション生成のリクエストに失敗しました: ${err.message}`);
@@ -204,28 +247,56 @@ export default function NewReportPage() {
             />
           </div>
 
-          {imagePreview && (
-            <div className="mt-2 relative w-full h-64 rounded-xl overflow-hidden border border-slate-800 bg-slate-950 flex items-center justify-center">
-              <img src={imagePreview} alt="Preview" className="h-full object-contain" />
+          {(imagePreview || image) && (
+            <div className="mt-2 relative w-full rounded-xl overflow-hidden border border-slate-800 bg-slate-950 flex items-center justify-center shadow-inner group">
+              <img src={imagePreview || image} alt="Preview" className="w-full max-h-[450px] object-contain" />
+              
+              {(showTitle || showPhotographer || showCamera || showLens) && (
+                <div className="absolute bottom-4 right-4 text-right text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] pointer-events-none space-y-0.5">
+                  {showPhotographer && photographer && (
+                    <p className="text-xs font-medium tracking-wide text-white/95">
+                      Shot by {photographer}
+                    </p>
+                  )}
+                  {(showCamera || showLens) && (
+                    <p className="text-[10px] text-slate-300 tracking-wider">
+                      {[showCamera ? camera : '', showLens ? selectedLens : ''].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                  {showTitle && title && (
+                    <p className="text-[11px] font-bold text-cyan-300 pt-0.5">
+                      📌 {title}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleDownloadBakedImage}
+                className="absolute top-3 right-3 px-3 py-2 bg-cyan-600/90 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-lg backdrop-blur-md transition flex items-center gap-1.5 cursor-pointer border border-cyan-400/30 z-10"
+              >
+                📥 撮影データを重ねた画像を保存
+              </button>
             </div>
           )}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 bg-slate-950 p-3 rounded-xl border border-slate-800 text-sm">
             <label className="flex items-center space-x-2 cursor-pointer">
               <input type="checkbox" checked={showTitle} onChange={(e) => setShowTitle(e.target.checked)} className="rounded bg-slate-900 border-slate-700 text-cyan-500" />
-              <span>写真名</span>
+              <span>写真名を表示</span>
             </label>
             <label className="flex items-center space-x-2 cursor-pointer">
               <input type="checkbox" checked={showPhotographer} onChange={(e) => setShowPhotographer(e.target.checked)} className="rounded bg-slate-900 border-slate-700 text-cyan-500" />
-              <span>撮影者</span>
+              <span>撮影者を表示</span>
             </label>
             <label className="flex items-center space-x-2 cursor-pointer">
               <input type="checkbox" checked={showCamera} onChange={(e) => setShowCamera(e.target.checked)} className="rounded bg-slate-900 border-slate-700 text-cyan-500" />
-              <span>カメラ名</span>
+              <span>カメラ名を表示</span>
             </label>
             <label className="flex items-center space-x-2 cursor-pointer">
               <input type="checkbox" checked={showLens} onChange={(e) => setShowLens(e.target.checked)} className="rounded bg-slate-900 border-slate-700 text-cyan-500" />
-              <span>レンズ名</span>
+              <span>レンズ名を表示</span>
             </label>
           </div>
 
@@ -247,6 +318,20 @@ export default function NewReportPage() {
               value={photographer}
               onChange={(e) => setPhotographer(e.target.value)}
               className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100"
+            />
+          </div>
+
+          {/* 💡 撮影者のこだわり・思いを入力する欄（コメント欄） */}
+          <div>
+            <label className="block text-sm font-medium mb-1 text-slate-300">
+              💬 撮影者のこだわり・思い・現場のメモ（任意）
+            </label>
+            <textarea
+              value={userComment}
+              onChange={(e) => setUserComment(e.target.value)}
+              placeholder="例: 雲ひとつない青空を狙うために早朝からスタンバイしました。シャッタースピードを上げて機体の鋭さを強調しています。"
+              rows={3}
+              className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl focus:outline-none focus:border-cyan-500 text-slate-100 text-sm leading-relaxed"
             />
           </div>
 
