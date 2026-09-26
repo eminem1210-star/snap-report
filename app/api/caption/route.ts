@@ -22,14 +22,14 @@ function classifyError(err: any): ErrorKind {
 
 // 503(混雑)は短いリトライで回復することが多いが、
 // 429(クォータ超過)はリトライしても無駄なので即座に次のモデルへ。
-async function generateWithFallback(ai: GoogleGenAI, contents: any) {
+async function generateWithFallback(ai: GoogleGenAI, contents: any, config?: any) {
   let lastError: any;
 
   for (const model of MODEL_CHAIN) {
     const maxRetries = 2;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        const response = await ai.models.generateContent({ model, contents });
+        const response = await ai.models.generateContent({ model, contents, ...(config ? { config } : {}) });
         return { response, modelUsed: model };
       } catch (err: any) {
         lastError = err;
@@ -59,31 +59,39 @@ async function generateWithFallback(ai: GoogleGenAI, contents: any) {
 // ==============================
 // プラットフォーム定義
 // ==============================
-const PLATFORM_PROMPTS: Record<string, { tag: string; instruction: string }> = {
+const PLATFORM_SPECS: Record<
+  string,
+  { label: string; captionGuide: string; hashtagMin: number; hashtagMax: number }
+> = {
   x: {
-    tag: 'X_CAPTION',
-    instruction:
-      'X(旧Twitter)用: 全角80〜120文字程度で簡潔・インパクト重視。ハッシュタグは3〜5個。',
+    label: 'X(旧Twitter)',
+    captionGuide: '全角80〜120文字程度で簡潔・インパクト重視。',
+    hashtagMin: 3,
+    hashtagMax: 5,
   },
   instagram: {
-    tag: 'INSTAGRAM_CAPTION',
-    instruction:
-      'Instagram用: 世界観を伝える文章を2〜4文+改行を活かした読みやすい構成。ハッシュタグは8〜15個、最後にまとめて記載。',
+    label: 'Instagram',
+    captionGuide: '世界観を伝える2〜4文。改行を活かした読みやすい構成。',
+    hashtagMin: 8,
+    hashtagMax: 15,
   },
   threads: {
-    tag: 'THREADS_CAPTION',
-    instruction:
-      'Threads用: 会話的でカジュアルなトーン。3〜5文程度。ハッシュタグは1〜3個、控えめに。',
+    label: 'Threads',
+    captionGuide: '会話的でカジュアルなトーンで3〜5文程度。',
+    hashtagMin: 1,
+    hashtagMax: 3,
   },
   tiktok: {
-    tag: 'TIKTOK_CAPTION',
-    instruction:
-      'TikTok用: 短く勢いのあるキャッチコピー調。絵文字を効果的に使い、ハッシュタグは4〜7個(トレンド系タグを意識)。',
+    label: 'TikTok',
+    captionGuide: '短く勢いのあるキャッチコピー調。絵文字を効果的に使う。',
+    hashtagMin: 4,
+    hashtagMax: 7,
   },
   blog: {
-    tag: 'BLOG_CAPTION',
-    instruction:
-      'ブログ/note用: 導入文として使える3〜5文の丁寧な文章。撮影の背景や意図が伝わるように。ハッシュタグは不要。',
+    label: 'ブログ/note',
+    captionGuide: '導入文として使える3〜5文の丁寧な文章。撮影の背景や意図が伝わるように。',
+    hashtagMin: 0,
+    hashtagMax: 0,
   },
 };
 
@@ -126,22 +134,30 @@ export async function POST(req: Request) {
     const requestedPlatforms: string[] =
       Array.isArray(platforms) && platforms.length > 0 ? platforms : ['x', 'instagram'];
 
-    const platformSection = requestedPlatforms
-      .filter((p) => PLATFORM_PROMPTS[p])
+    const validPlatforms = requestedPlatforms.filter((p) => PLATFORM_SPECS[p]);
+
+    const schemaFields = validPlatforms
       .map((p) => {
-        const { tag, instruction } = PLATFORM_PROMPTS[p];
-        return `【${tag}】
-${instruction}
-以下の形式で必ず出力すること:
----${tag}_START---
-(ここに本文とハッシュタグ)
----${tag}_END---`;
+        const spec = PLATFORM_SPECS[p];
+        const hashtagRule =
+          spec.hashtagMax > 0
+            ? `"hashtags": string[]  // 必ず${spec.hashtagMin}〜${spec.hashtagMax}個。1要素につきタグ1つ、"#"から始める`
+            : `"hashtags": []  // このプラットフォームはハッシュタグ不要。必ず空配列にする`;
+        return `  "${p}": {
+    // ${spec.label}向け。${spec.captionGuide}
+    "caption": string,  // 本文のみ。ハッシュタグは絶対に含めない
+    ${hashtagRule}
+  }`;
       })
-      .join('\n\n');
+      .join(',\n');
+
+    const platformChecklist = validPlatforms
+      .map((p) => `- ${PLATFORM_SPECS[p].label}: hashtagsは${PLATFORM_SPECS[p].hashtagMin}〜${PLATFORM_SPECS[p].hashtagMax}個(必ず下限以上)`)
+      .join('\n');
 
     const affiliateSection =
       includeAffiliate && affiliateLink
-        ? `\n- 使用機材の紹介として、以下のリンクを本文の末尾に自然な形で1回だけ含めてください: ${affiliateLink}`
+        ? `\n- 使用機材の紹介として、以下のリンクをcaption本文の末尾に自然な形で1回だけ含めてください: ${affiliateLink}`
         : '';
 
     const adjustSection = adjustInstruction
@@ -163,16 +179,17 @@ ${instruction}
 ${affiliateSection}
 ${adjustSection}
 
-【出力してほしいプラットフォーム】
-${platformSection}
+【出力形式】
+前後に説明文・前置き・マークダウンのコードフェンス(\`\`\`)は一切付けず、以下のJSONオブジェクトのみを出力してください。指定したキー以外は含めないこと。
 
-【投稿タイミングの提案】
-上記すべてに加えて、このジャンル・内容に最も適した投稿タイミング(曜日・時間帯)とその理由を1〜2文で、以下の形式で出力してください:
----POSTING_TIP_START---
-(ここに投稿タイミングの提案)
----POSTING_TIP_END---
+{
+${schemaFields},
+  "postingTip": string  // このジャンル・内容に最も適した投稿タイミング(曜日・時間帯)とその理由を1〜2文で
+}
 
-必ず指定した区切り記号(---TAG_START---〜---TAG_END---)を守り、それ以外の前置きや説明文は一切出力しないでください。
+【ハッシュタグ個数チェックリスト・必ず守ること】
+${platformChecklist}
+上記の下限を1つでも下回った場合は出力として不正です。各hashtags配列は指定範囲内の個数になるまで具体的なタグを追加してください。
 `;
 
     let contents: any;
@@ -191,16 +208,18 @@ ${platformSection}
       contents = prompt;
     }
 
+    const genConfig = { responseMimeType: 'application/json' };
+
     let response, modelUsed;
     try {
-      const result = await generateWithFallback(ai, contents);
+      const result = await generateWithFallback(ai, contents, genConfig);
       response = result.response;
       modelUsed = result.modelUsed;
     } catch (err) {
       // 画像付きで全モデル失敗した場合、テキストのみで最終フォールバック
       if (contents !== prompt) {
         console.warn('All models failed with image, retrying text-only');
-        const result = await generateWithFallback(ai, prompt);
+        const result = await generateWithFallback(ai, prompt, genConfig);
         response = result.response;
         modelUsed = result.modelUsed;
       } else {

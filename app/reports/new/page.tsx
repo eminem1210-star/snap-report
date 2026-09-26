@@ -542,24 +542,30 @@ export default function NewReportPage() {
   };
 
   const parseResponse = (raw: string) => {
+    // responseMimeType: 'application/json' を指定していても、
+    // 念のためコードフェンスが付いていた場合に備えて除去してからパースする
+    const cleaned = raw.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '');
+
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(cleaned);
+    } catch (e) {
+      console.error('AIレスポンスのJSONパースに失敗しました:', e, raw);
+      return { result: {}, tip: '' };
+    }
+
     const result: Record<string, string> = {};
     PLATFORM_OPTIONS.forEach(({ id }) => {
-      const tag = { x: 'X_CAPTION', instagram: 'INSTAGRAM_CAPTION', threads: 'THREADS_CAPTION', tiktok: 'TIKTOK_CAPTION', blog: 'BLOG_CAPTION' }[id];
-      const startTag = `---${tag}_START---`;
-      const endTag = `---${tag}_END---`;
-      const s = raw.indexOf(startTag);
-      const e = raw.indexOf(endTag);
-      if (s !== -1 && e !== -1) {
-        result[id] = raw.substring(s + startTag.length, e).trim();
+      const entry = parsed[id];
+      if (entry && typeof entry.caption === 'string') {
+        const hashtags = Array.isArray(entry.hashtags)
+          ? entry.hashtags.filter((h: any) => typeof h === 'string' && h.trim()).join(' ')
+          : '';
+        result[id] = hashtags ? `${entry.caption.trim()}\n\n${hashtags}` : entry.caption.trim();
       }
     });
 
-    const tipStart = raw.indexOf('---POSTING_TIP_START---');
-    const tipEnd = raw.indexOf('---POSTING_TIP_END---');
-    const tip = tipStart !== -1 && tipEnd !== -1
-      ? raw.substring(tipStart + '---POSTING_TIP_START---'.length, tipEnd).trim()
-      : '';
-
+    const tip = typeof parsed.postingTip === 'string' ? parsed.postingTip : '';
     return { result, tip };
   };
 
